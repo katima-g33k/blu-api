@@ -52,7 +52,9 @@ $API['reservation'] = [
   'select' => function($data) {
     $reservations = [];
     $query = "SELECT reservation.date,
+                     item.id AS item_id,
                      item.name AS item_name,
+                     member.no AS member_no,
                      member.first_name AS member_first_name,
                      member.last_name AS member_last_name
               FROM reservation
@@ -68,9 +70,11 @@ $API['reservation'] = [
       $reservation = [
         'date' => $row['date'],
         'item' => [
+          'id' => $row['item_id'],
           'name' => $row['item_name']
         ],
         'parent' => [
+          'no' => $row['member_no'],
           'first_name' => $row['member_first_name'],
           'last_name' => $row['member_last_name']
         ]
@@ -80,8 +84,10 @@ $API['reservation'] = [
 
     $query = "SELECT t.date,
                      c.price AS copy_price,
+                     p.no AS parent_no,
                      p.first_name AS parent_first_name,
                      p.last_name AS parent_last_name,
+                     i.id AS item_id,
                      i.name AS item_name,
                      m.member_first_name,
                      m.member_last_name,
@@ -115,10 +121,12 @@ $API['reservation'] = [
       $reservation = [
         'date' => $row['date'],
         'parent' => [
+          'no' => $row['parent_no'],
           'first_name' => $row['parent_first_name'],
           'last_name' => $row['parent_last_name']
         ],
         'item' => [
+          'id' => $row['item_id'],
           'name' => $row['item_name']
         ],
         'copy' => [

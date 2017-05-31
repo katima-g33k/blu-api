@@ -1,4 +1,10 @@
 <?php
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS');
+header('Access-Control-Allow-Headers: X-Authorization');
+header('Access-Control-Allow-Methods: OPTIONS, true, 200');
+header("Content-Type: application/json;charset=utf-8");
+
 $API = [];
 $req = null;
 
@@ -21,10 +27,18 @@ if (isset($_POST['req'])) {
   $req = json_decode($_GET['req'], true);
 }
 
-header("Content-Type: application/json;charset=utf-8");
+$apiKey = '';
+if (isset(getallheaders()['X-Authorization'])) {
+  $apiKey = getallheaders()['X-Authorization'];
+} else if (isset($req['api-key'])) {
+  $apiKey = $req['api-key'];
+}
 
-if (isValidRequest($req)) {
-  if (getallheaders()['X-Authorization'] == API_KEY) {
+if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
+  http_response_code(200);
+  echo json_encode([]);
+} else if (isValidRequest($req)) {
+  if ($apiKey == API_KEY) {
     echo json_encode([ 'data' => $API[$req['object']][$req['function']](sanatize($req['data'])) ]);
   } else {
     http_response_code(403);

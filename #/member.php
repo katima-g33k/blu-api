@@ -16,9 +16,11 @@ $API['member'] = [
     $phones = [];
     $response = $API['member']['insertMember']($data);
 
-    foreach($data['phone'] AS $phone) {
-      $id = insertPhone($data['no'], $phone['number'], $phone['note']);
-      array_push($phones, ['id' => $id, 'number' => $phone['number']]);
+    if (isset($data['phone'])) {
+      foreach($data['phone'] AS $phone) {
+        $id = insertPhone($data['no'], $phone['number'], $phone['note']);
+        array_push($phones, ['id' => $id, 'number' => $phone['number']]);
+      }
     }
 
     if (count($phones) > 0) {
@@ -42,7 +44,8 @@ $API['member'] = [
     if (isset($member['phone'])) {
       foreach($member['phone'] as $phone) {
         if (isset($phone['id']) && isset($phone['number'])) {
-          updatePhone($phone['id'], $phone['number'], $phone['note']);
+          $note = isset($phone['note']) ? $phone['note'] : '';
+          updatePhone($phone['id'], $phone['number'], $note);
         } else if (isset($phone['id'])) {
           deletePhone($phone['id']);
           array_push($phones, ['id' => $phone['id']]);
@@ -74,6 +77,7 @@ $API['member'] = [
       $member['account']['copies'] = array_merge($copies, $donations);
     } else {
       $member['account']['copies'] = $API['copy']['selectForMember']($no);
+      $member['account']['transfers'] = getTranferDates($no);
     }
 
     if ($member['is_parent']) {
@@ -222,36 +226,57 @@ $API['member'] = [
     return $comments;
   },
 
+  'getName' => function($data) {
+    $no = $data['no'];
+    $query = "SELECT first_name, last_name FROM member WHERE no=$no";
+
+    include '#/connection.php';
+    $result = mysqli_query($connection, $query) or die(json_encode(INTERNAL_SERVER_ERROR));
+    $row = mysqli_fetch_assoc($result);
+    mysqli_close($connection);
+    return $row;
+  },
+
   'insertMember' => function($data) {
     global $API;
 
-    $no = $data['no'];
+    $fakeNo = !isset($data['no']);
+    $no = $fakeNo ? fakeMemberNo() : $data['no'];
     $firstName = $data['first_name'];
     $lastName = $data['last_name'];
     $email = $data['email'];
-    $isParent = 0;
-    $address = $data['address'];
-    $zip = $data['zip'];
-    $city = getCityId($data['city']);
-
-    if (isset($data['is_parent']) && $data['is_parent']) {
-      $isParent = 1;
-    }
+    $isParent = isset($data['is_parent']) && $data['is_parent'] ? 1 : 0;
+    $address = isset($data['address']) ? $data['address'] : '';
+    $zip = isset($data['zip']) ? $data['zip'] : '';
+    $city = isset($data['city']) ? getCityId($data['city']) : null;
 
     $query = "INSERT INTO member(no, first_name, last_name, email, registration, last_activity,
                                  is_parent, address, zip, city)
               VALUES ('$no', '$firstName', '$lastName', '$email', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
                       $isParent, '$address', '$zip', $city);";
 
-    include '#/connection.php';
-    mysqli_query($connection, $query) or die(json_encode(INTERNAL_SERVER_ERROR));
-    mysqli_close($connection);
-
-    if ($city > 0) {
-      return [ 'city' => ['id' => $city ]];
+    if ($city == null) {
+      $query = "INSERT INTO member(no, first_name, last_name, email, registration, last_activity,
+                                   is_parent, address, zip)
+                VALUES ('$no', '$firstName', '$lastName', '$email', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+                        $isParent, '$address', '$zip');";
     }
 
-    return [];
+    include '#/connection.php';
+    mysqli_query($connection, $query) or die($fakeNo);
+    mysqli_close($connection);
+
+    $response = [];
+
+    if ($fakeNo) {
+      $response['no'] = $no;
+    }
+
+    // if ($city !== null && $city > 0) {
+    //   $response['city'] = [ 'id' => $city ];
+    // }
+
+    return $response;
   },
 
   'renew' => function($data) {
@@ -266,7 +291,7 @@ $API['member'] = [
     return OPERATION_SUCCESSFUL;
   },
 
-  'exist' => function($data) {
+  'exists' => function($data) {
     $query = "SELECT COUNT(no) AS count FROM member WHERE ";
 
     if (isset($data['no'])) {
@@ -293,7 +318,8 @@ $API['member'] = [
 
 function getCityId($city) {
   $name = $city['name'];
-  $state = $city['state']['code'];
+  // TODO: Fix me
+  $state = 'QC'; // $city['state']['code'];
   $query = "SELECT id FROM city WHERE name = '$name';";
 
   include '#/connection.php';
@@ -323,6 +349,25 @@ function insertPhone($member, $number, $note) {
 
   mysqli_close($connection);
   return $id;
+}
+
+function getTranferDates($no) {
+  $transfers = [];
+  $query = "SELECT DISTINCT(DATE(date)) AS date
+            FROM transaction
+            WHERE member=$no
+            AND type=(SELECT id FROM transaction_type WHERE code='DONATE')
+            ORDER BY date ASC;";
+
+  include '#/connection.php';
+  $result = mysqli_query($connection, $query) or die(json_encode(INTERNAL_SERVER_ERROR));
+
+  while($row = mysqli_fetch_assoc($result)) {
+    array_push($transfers, $row['date']);
+  }
+
+  mysqli_close($connection);
+  return $transfers;
 }
 
 function deletePhone($id) {
@@ -390,8 +435,8 @@ function selectMember($data) {
                    state.code AS state_code,
                    state.name AS state_name
             FROM member
-            INNER JOIN city ON member.city = city.id
-            INNER JOIN state ON city.state = state.code
+            LEFT JOIN city ON member.city = city.id
+            LEFT JOIN state ON city.state = state.code
             WHERE ";
 
   if (isset($data['no'])) {
@@ -462,5 +507,21 @@ function selectPhone($no) {
 
   mysqli_close($connection);
   return $phones;
+}
+
+function fakeMemberNo() {
+  include '#/connection.php';
+
+  $query = "SELECT no FROM member WHERE no LIKE '18%' ORDER BY no DESC LIMIT 1";
+  $result = mysqli_query($connection, $query) or die(json_encode(INTERNAL_SERVER_ERROR));
+  $row = mysqli_fetch_assoc($result);
+
+  mysqli_close($connection);
+
+  if ($row !== null && isset($row['no'])) {
+    return  ($row['no'] + 1);
+  }
+
+  return 180000000;
 }
 ?>

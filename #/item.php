@@ -13,16 +13,15 @@ $API['item'] = [
 
   'exists' => function($data) {
     $ean13 = $data['ean13'];
-    $query = "SELECT COUNT(id) as count FROM item WHERE `ean13`='$ean13';";
+    $query = "SELECT id FROM item WHERE `ean13`='$ean13';";
 
     include '#/connection.php';
     $result = mysqli_query($connection, $query) or die(json_encode(INTERNAL_SERVER_ERROR));
     $row = mysqli_fetch_assoc($result);
-    $count = $row['count'];
     mysqli_close($connection);
 
-    if ($row['count'] > 0) {
-      return DATA_FOUND;
+    if (isset($row['id'])) {
+      return [ 'code' => 200, 'id' => $row['id'] ]; 
     }
 
     return NO_DATA_FOUND;
@@ -44,12 +43,12 @@ $API['item'] = [
     $query .= " status=(SELECT id FROM status WHERE code='$status');";
 
     include '#/connection.php';
-    mysqli_query($connection, $query) or die(json_encode(INTERNAL_SERVER_ERROR));
+    mysqli_query($connection, $query) or die($query);
     $id = mysqli_insert_id($connection);
     mysqli_close($connection);
 
     $API['item']['updateStatus']([ 'id' => $id, 'status' => $status ]);
-    $authorList = updateAuthors($id, $authors);
+    $authorList = $authors ? updateAuthors($id, $authors) : [];
 
     return array_merge(OPERATION_SUCCESSFUL, [ 'id' => $id ], [ 'author' => $authorList ]);
   },
@@ -131,6 +130,10 @@ $API['item'] = [
     $item['storage'] = $API['item']['selectStorage']($item['id']);
     $item['reservation'] = $API['reservation']['selectForItem']($item['id']);
     return $item;
+  },
+
+  'selectAuthor' => function($id) {
+    return selectAuthor($id);
   },
 
   'selectStorage' => function($id) {
@@ -253,70 +256,41 @@ function updateItem($id, $item) {
   mysqli_close($connection);
 }
 
-function updateAuthors($id, $authors) {
+function updateAuthors($itemId, $authors) {
   $authorList = [];
+
+  $query = "DELETE FROM item_author WHERE item=$itemId";
+  include '#/connection.php';
+  mysqli_query($connection, $query) or die(json_encode(INTERNAL_SERVER_ERROR));
+  mysqli_close($connection);
+
   foreach ($authors as $author) {
-    if (isset($author['id']) && (isset($author['last_name']) || isset($author['last_name']))) {
-      // Update author info
+    $firstName = $author['first_name'];
+    $lastName = $author['last_name'];
+
+    if (isset($author['id']) && $author['id'] !== 0) {
       $authorId = $author['id'];
-      unset($author['id']);
-      $query = "UPDATE author SET";
-      foreach ($author as $field => $value) {
-        $count++;
-        $query .= " $field='$value'";
 
-        if ($count < count($item)) {
-          $query .= ',';
-        }
-      }
-
-      $query .= " WHERE id=$id;";
-
+      $query = "UPDATE author SET first_name='$firstName', last_name='$lastName' WHERE id=$authorId;
+                INSERT INTO item_author(item, author) VALUES($itemId, $authorId);";
       include '#/connection.php';
-      mysqli_query($connection, $query) or die(json_encode(INTERNAL_SERVER_ERROR));
-      mysqli_close($connection);
-    } else if (isset($author['id'])) {
-      // Delete link to author
-      $authorId = $author['id'];
-      $query = "DELETE FROM item_author WHERE item=$id AND author=$authorId;";
-
-      include '#/connection.php';
-      mysqli_query($connection, $query) or die(json_encode(INTERNAL_SERVER_ERROR));
+      mysqli_multi_query($connection, $query) or die(json_encode(INTERNAL_SERVER_ERROR));
       mysqli_close($connection);
     } else {
-      $firstName = $author['first_name'];
-      $lastName = $author['last_name'];
+      $query = "INSERT INTO author(first_name, last_name) VALUES('$firstName', '$lastName')";
       include '#/connection.php';
+      mysqli_query($connection, $query) or die(json_encode(INTERNAL_SERVER_ERROR));
+      $authorId = mysqli_insert_id($connection);
 
-      // Check if author already exists
-      $query = "SELECT id FROM author WHERE first_name='$firstName' AND last_name='$lastName';";
-      $result = mysqli_query($connection, $query) or die(json_encode(INTERNAL_SERVER_ERROR));
-      $row = mysqli_fetch_assoc($result);
+      $query = "INSERT INTO item_author(item, author) VALUES($itemId, $authorId);";
+      mysqli_query($connection, $query) or die(json_encode(INTERNAL_SERVER_ERROR));
+      mysqli_close($connection);
 
-      // If author found return it's info
-      if (isset($row['id'])) {
-        array_push($authorList, [
-          'id' => $row['id'],
-          'first_name' => $firstName,
-          'last_name' => $lastName
-        ]);
-      } else {
-        // If author doesn't exist
-        // Insert author info and create link
-        $query = "INSERT INTO author(first_name, last_name) VALUES('$firstName', '$lastName')";
-        mysqli_query($connection, $query) or die(json_encode(INTERNAL_SERVER_ERROR));
-        $authorId = mysqli_insert_id($connection);
-
-        $query = "INSERT INTO item_author(item, author) VALUES($id, $authorId);";
-        mysqli_query($connection, $query) or die(json_encode(INTERNAL_SERVER_ERROR));
-        mysqli_close($connection);
-
-        array_push($authorList, [
-          'id' => $authorId,
-          'first_name' => $firstName,
-          'last_name' => $lastName
-        ]);
-      }
+      array_push($authorList, [
+        'id' => $authorId,
+        'first_name' => $firstName,
+        'last_name' => $lastName
+      ]);
     }
   }
 

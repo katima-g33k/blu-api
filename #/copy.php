@@ -118,6 +118,7 @@ $API['copy'] = [
       if ($isBook) {
         $copy['item']['status'] = [];
         $copy['item']['status'][$row['status_code']] = $row['status_date'];
+        $copy['item']['author'] = $API['item']['selectAuthor']($copy['item']['id']);
       }
 
       if ($copy['transaction'] != false) {
@@ -163,7 +164,7 @@ $API['copy'] = [
             'last_activity' => $row['member_last_activity']
           ]
         ],
-        'transaction' =>$API['transaction']['select']($row['id'])
+        'transaction' => $API['transaction']['select']($row['id'])
       ];
 
       if ($copy['transaction'] != false) {
