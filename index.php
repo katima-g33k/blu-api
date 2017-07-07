@@ -1,9 +1,8 @@
 <?php
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS');
-header('Access-Control-Allow-Headers: X-Authorization');
-header('Access-Control-Allow-Methods: OPTIONS, true, 200');
-header("Content-Type: application/json;charset=utf-8");
+header('Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Access-Control-Allow-Headers, Access-Control-Allow-Methods, Access-Control-Allow-Origin');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Content-Type: application/json;charset=utf-8');
 
 $API = [];
 $req = null;

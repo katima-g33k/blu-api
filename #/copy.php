@@ -178,12 +178,12 @@ $API['copy'] = [
   'insert' => function($data) {
     global $API;
 
-    $id = insertCopy($data['item_id'], $data['price']);
+    $id = insertCopy($data['item'], $data['price']);
     $res = [ 'id' => $id ];
-    $API['transaction']['_insertOne']($data['member_no'], $id, 'ADD');
-    $API['member']['renew']([ 'no' => $data['member_no'] ]);
+    $API['transaction']['_insertOne']($data['member'], $id, 'ADD');
+    $API['member']['renew']([ 'no' => $data['member'] ]);
 
-    $reservation = handleReservation($id, $data['item_id']);
+    $reservation = handleReservation($id, $data['item']);
 
     if ($reservation) {
       $res['reservation'] = $reservation;
