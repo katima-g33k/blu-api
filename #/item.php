@@ -54,31 +54,26 @@ $API['item'] = [
   },
 
   'search' => function($data) {
-    $search = $data['search'];
-    $outdated = false;
-
-    if (isset($data['outdated']) && $data['outdated']) {
-      $outdated = true;
-    }
+    $search = '%' . str_replace(' ', '%', $data['search']) . '%';
+    $outdated = isset($data['outdated']) && $data['outdated'];
 
     $items = [];
-    $query = "SELECT id, name, edition, publication, editor, is_book
+    $query = "SELECT item.id, name, edition, publication, editor, is_book, first_name, last_name
               FROM item
-              WHERE";
-
-    $searchValues = explode(" ", $search);
-
-    foreach ($searchValues as $index => $value) {
-      if ($index != 0) {
-        $query .= " OR";
-      }
-
-      $query .= " name LIKE '%$value%'";
-    }
+              INNER JOIN item_author
+                ON item.id = item_author.item
+              INNER JOIN author
+                ON item_author.author = author.id
+              WHERE (name LIKE '$search'
+              OR editor LIKE '$search'
+              OR CONCAT(first_name, ' ', last_name) LIKE '$search'
+              OR CONCAT(last_name, ' ', first_name) LIKE '$search')";
 
     if (!$outdated) {
       $query .= " AND status = (SELECT id FROM status WHERE code ='VALID')";
     }
+
+    $query .= " GROUP BY item.id;";
 
     include '#/connection.php';
     $result = mysqli_query($connection, $query) or die("Query failed: '$query'");

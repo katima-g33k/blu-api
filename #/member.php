@@ -88,27 +88,16 @@ $API['member'] = [
   },
 
   'search' => function($data) {
-    $search = $data['search'];
+    $search = str_replace(' ', '%', $data['search']);
     $deactivated = isset($data['deactivated']) && $data['deactivated'];
     $isParent = isset($data['is_parent']) && $data['is_parent'];
     $members = [];
     $query = "SELECT no, first_name, last_name
               FROM member
-              WHERE (";
-
-    $searchValues = explode(" ", $search);
-
-    foreach ($searchValues as $index => $value) {
-      if ($index != 0) {
-        $query .= " OR ";
-      }
-
-      $query .= "no LIKE '%$value%'
-                OR first_name LIKE '%$value%'
-                OR last_name LIKE '%$value%'";
-    }
-
-    $query .= ")";
+              WHERE (CONCAT(first_name, ' ', last_name) LIKE '%$search%'
+              OR CONCAT(last_name, ' ', first_name) LIKE '%$search%'
+              OR no LIKE '%$search%'
+              OR email LIKE '%$search%')";
 
     if (!$deactivated) {
       $query .= " AND last_activity > SUBDATE(CURRENT_TIMESTAMP, INTERVAL 1 YEAR)";
