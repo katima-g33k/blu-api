@@ -16,6 +16,7 @@ require_once '#/item.php';
 require_once '#/member.php';
 require_once '#/reservation.php';
 require_once '#/state.php';
+require_once '#/statistics.php';
 require_once '#/storage.php';
 require_once '#/subject.php';
 require_once '#/transaction.php';
