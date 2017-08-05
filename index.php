@@ -12,6 +12,7 @@ require_once '#/const.php';
 require_once '#/category.php';
 require_once '#/comment.php';
 require_once '#/copy.php';
+require_once '#/employee.php';
 require_once '#/item.php';
 require_once '#/member.php';
 require_once '#/reservation.php';
