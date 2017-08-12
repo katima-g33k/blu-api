@@ -98,6 +98,61 @@ $API['item'] = [
     return $items;
   },
 
+  'list' => function() {
+    $query = "SELECT
+                item.id,
+                item.name,
+                item.publication,
+                item.edition,
+                item.editor,
+                item.is_book,
+                status.code,
+                status_history.date,
+                subject.id,
+                subject.name
+              FROM item
+              INNER JOIN status_history
+                ON item.status = status_history.status
+                AND item.id = status_history.item
+              INNER JOIN status
+                ON item.status = status.id
+              INNER JOIN subject
+                ON item.subject = subject.id
+              ORDER BY item.name";
+
+    include "#/connection.php";
+    $statement = mysqli_prepare($connection, $query);
+
+    mysqli_stmt_execute($statement);
+    mysqli_stmt_bind_result($statement, $id, $name, $publication, $edition, $editor, $isBook, $status, $statusDate, $subjectId, $subjectName);
+
+    $items = [];
+    while (mysqli_stmt_fetch($statement)) {
+       $item = [
+        'id' => $id,
+        'name' => $name,
+        'publication' => $publication,
+        'edition' => $edition,
+        'editor' => $editor,
+        'isBook' => $isBook == 1,
+        'subject' => [
+          'id' => $subjectId,
+          'name' => $subjectName
+        ],
+        'status' => [],
+        'author' => $isBook == 1 ? selectAuthor($id) : []
+      ];
+
+      $item['status'][$status] = $statusDate;
+
+      array_push($items, $item);     
+    }
+    
+    mysqli_stmt_close($statement);
+    mysqli_close($connection);
+    return $items;
+  },
+
   'select' => function($data) {
     global $API;
 
@@ -293,34 +348,31 @@ function updateAuthors($itemId, $authors) {
 }
 
 function selectAuthor($itemId) {
-  $authors = [];
   $query = "SELECT id, first_name, last_name
             FROM author
             INNER JOIN item_author
               ON author.id = item_author.author
-            WHERE item_author.item = $itemId";
+            WHERE item_author.item = ?";
 
-  include '#/connection.php';
-  $result = mysqli_query($connection, $query) or die("Query failed: '$query'");
+  include "#/connection.php";
+  $statement = mysqli_prepare($connection, $query);
+  mysqli_stmt_bind_param($statement, 'i', $itemId);
 
-  while($row = mysqli_fetch_assoc($result)) {
-    if ($row['first_name'] == null) {
-      $row['first_name'] = "";
-    }
+  mysqli_stmt_execute($statement);
+  mysqli_stmt_bind_result($statement, $id, $firstName, $lastName);
 
-    if ($row['last_name'] == null) {
-      $row['last_name'] = "";
-    }
-
+  $authors = [];
+  while (mysqli_stmt_fetch($statement)) {
     $author = [
-      'id' => $row['id'],
-      'first_name' => $row['first_name'],
-      'last_name' => $row['last_name']
+      'id' => $id,
+      'firstName' => $firstName,
+      'lastName' => $lastName
     ];
 
-    array_push($authors, $author);
+    array_push($authors, $author);     
   }
-
+  
+  mysqli_stmt_close($statement);
   mysqli_close($connection);
   return $authors;
 }
