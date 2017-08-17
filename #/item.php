@@ -99,6 +99,7 @@ $API['item'] = [
   },
 
   'list' => function() {
+    global $API;
     $query = "SELECT
                 item.id,
                 item.name,
@@ -140,6 +141,9 @@ $API['item'] = [
           'name' => $subjectName
         ],
         'status' => [],
+        'stats' => [
+          'inStock' => $API['copy']['getQuantityInStock']($id)
+        ],
         'author' => $isBook == 1 ? selectAuthor($id) : []
       ];
 

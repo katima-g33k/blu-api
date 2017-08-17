@@ -214,6 +214,35 @@ $API['copy'] = [
     mysqli_close($connection);
 
     return OPERATION_SUCCESSFUL;
+  },
+
+  'getQuantityInStock' => function($itemId) {
+    $query = "SELECT
+              (SELECT COUNT(DISTINCT(copy.id))
+              FROM copy
+              INNER JOIN transaction
+                ON copy.id = transaction.copy
+              WHERE item = ?) - 
+              (SELECT COUNT(DISTINCT(copy.id))
+              FROM copy
+              INNER JOIN transaction
+                ON copy.id = transaction.copy
+              WHERE item = ?
+              AND transaction.type IN (SELECT transaction_type.id
+                                      FROM transaction_type
+                                      WHERE transaction_type.code
+                                      IN ('SELL', 'SELL_PARENT', 'AJUST_INVENTORY')))
+            AS inStock;";
+
+    include "#/connection.php";
+    $statement = mysqli_prepare($connection, $query);
+    mysqli_stmt_bind_param($statement, 'ii', $itemId, $itemId);
+
+    mysqli_stmt_execute($statement);
+    mysqli_stmt_bind_result($statement, $inStock);
+    mysqli_stmt_fetch($statement);
+
+    return $inStock;
   }
 ];
 
