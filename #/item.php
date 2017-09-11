@@ -12,19 +12,20 @@ $API['item'] = [
   },
 
   'exists' => function($data) {
+    $query = "SELECT id FROM item WHERE ean13=?";
     $ean13 = $data['ean13'];
-    $query = "SELECT id FROM item WHERE `ean13`='$ean13';";
 
     include '#/connection.php';
-    $result = mysqli_query($connection, $query) or die(json_encode(INTERNAL_SERVER_ERROR));
-    $row = mysqli_fetch_assoc($result);
+    $statement = mysqli_prepare($connection, $query);
+    mysqli_stmt_bind_param($statement, 's', $ean13);
+
+    mysqli_stmt_execute($statement);
+    mysqli_stmt_bind_result($statement, $id);
+    mysqli_stmt_fetch($statement);
+
+    mysqli_stmt_close($statement);
     mysqli_close($connection);
-
-    if (isset($row['id'])) {
-      return [ 'code' => 200, 'id' => $row['id'] ]; 
-    }
-
-    return NO_DATA_FOUND;
+    return [ 'id' => $id ];
   },
 
   'insert' => function($data) {
@@ -155,6 +156,25 @@ $API['item'] = [
     mysqli_stmt_close($statement);
     mysqli_close($connection);
     return $items;
+  },
+
+  'merge' => function($data) {
+    $id = $data['id'];
+    $duplicate = $data['duplicate'];
+    $query = "UPDATE copy SET item=$id WHERE item=$duplicate;
+              UPDATE reservation SET item=$id WHERE item=$duplicate;
+              UPDATE item_feed SET item=$id WHERE item=$duplicate;
+              UPDATE error SET item=$id WHERE item=$duplicate;
+              DELETE FROM item_author WHERE item=$duplicate;
+              DELETE FROM status_history WHERE item=$duplicate;
+              DELETE FROM storage WHERE item=$duplicate;
+              DELETE FROM item WHERE id=$duplicate;";
+
+    include '#/connection.php';
+    mysqli_multi_query($connection, $query) or die(json_encode(INTERNAL_SERVER_ERROR));
+
+    mysqli_close($connection);
+    return OPERATION_SUCCESSFUL;
   },
 
   'select' => function($data) {

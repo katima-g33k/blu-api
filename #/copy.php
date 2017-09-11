@@ -242,6 +242,8 @@ $API['copy'] = [
     mysqli_stmt_bind_result($statement, $inStock);
     mysqli_stmt_fetch($statement);
 
+    mysqli_stmt_close($statement);
+    mysqli_close($connection);
     return $inStock;
   }
 ];
