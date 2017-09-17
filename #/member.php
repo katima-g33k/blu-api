@@ -212,7 +212,11 @@ $API['member'] = [
   'merge' => function ($data) {
     $no = $data['no'];
     $duplicate = $data['duplicate'];
-    $query = "UPDATE transaction SET member=$no WHERE member=$duplicate;
+    $dates = getDates($no, $duplicate);
+    $registration = $dates['registration'];
+    $lastActivity = $dates['lastActivity'];
+    $query = "UPDATE member SET registration='$registration', last_activity='$lastActivity' WHERE no=$no;
+              UPDATE transaction SET member=$no WHERE member=$duplicate;
               UPDATE reservation SET member=$no WHERE member=$duplicate;
               UPDATE comment SET member=$no WHERE member=$duplicate;
               UPDATE error SET member=$no WHERE member=$duplicate;
@@ -237,6 +241,40 @@ $API['member'] = [
     mysqli_query($connection, $query) or die(json_encode(INTERNAL_SERVER_ERROR));
     mysqli_close($connection);
     return OPERATION_SUCCESSFUL;
+  },
+
+  'duplicates' => function($data) {
+    $duplicates = [];
+    $query = "SELECT
+                  @no := no,
+                  CONCAT(first_name, ' ', last_name),
+                  email,
+                  registration,
+                  last_activity
+              FROM member
+              WHERE no < 180000000
+              OR no LIKE CONCAT('%', @no, '%')
+              OR email IN (SELECT email FROM member GROUP BY email HAVING COUNT(no) > 1);";
+
+    include '#/connection.php';
+    $statement = mysqli_prepare($connection, $query);
+
+    mysqli_stmt_execute($statement);
+    mysqli_stmt_bind_result($statement, $no, $name, $email, $registration, $lastActivity);
+    
+    while(mysqli_stmt_fetch($statement)) {
+      array_push($duplicates, [
+        'no' => $no,
+        'name' => $name,
+        'email' => $email,
+        'registration' => $registration,
+        'lastActivity' => $lastActivity
+      ]);
+    }
+
+    mysqli_stmt_close($statement);
+    mysqli_close($connection);
+    return $duplicates;
   },
 
   'exists' => function($data) {
@@ -282,6 +320,32 @@ function getCityId($city) {
 
   mysqli_close($connection);
   return $id;
+}
+
+function getDates($no, $duplicate) {
+  $data = [];
+  $query = "SELECT registration, last_activity FROM member WHERE no IN (?, ?);";
+
+  include "#/connection.php";
+  $statement = mysqli_prepare($connection, $query);
+  mysqli_stmt_bind_param($statement, 'ii', $no, $duplicate);
+
+  mysqli_stmt_execute($statement);
+  mysqli_stmt_bind_result($statement, $registration, $lastActivity);
+  
+  while (mysqli_stmt_fetch($statement)) {
+    if (!isset($data['registration']) || strtotime($data['registration']) > strtotime($registration)) {
+      $data['registration'] = $registration;
+    }
+
+    if (!isset($data['lastActivity']) || strtotime($data['lastActivity']) < strtotime($lastActivity)) {
+      $data['lastActivity'] = $lastActivity;
+    }
+  }
+
+  mysqli_stmt_close($statement);
+  mysqli_close($connection);
+  return $data;
 }
 
 function insertPhone($member, $number, $note) {
