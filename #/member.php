@@ -498,7 +498,7 @@ function selectMember($data) {
     ],
     'account' => [
       'registration' => $row['registration'],
-      'last_activity' => $row['last_activity'],
+      'lastActivity' => $row['last_activity'],
     ]
   ];
 }

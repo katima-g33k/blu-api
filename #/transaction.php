@@ -70,8 +70,8 @@ $API['transaction'] = [
       if ($row['code'] == 'RESERVE') {
         $transaction['parent'] = [
           'no' => $row['member_no'],
-          'first_name' => $row['member_first_name'],
-          'last_name' => $row['member_last_name']
+          'firstName' => $row['member_first_name'],
+          'lastName' => $row['member_last_name']
         ];
       }
 

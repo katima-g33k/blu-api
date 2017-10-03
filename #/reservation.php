@@ -75,8 +75,8 @@ $API['reservation'] = [
         ],
         'parent' => [
           'no' => $row['member_no'],
-          'first_name' => $row['member_first_name'],
-          'last_name' => $row['member_last_name']
+          'firstName' => $row['member_first_name'],
+          'lastName' => $row['member_last_name']
         ]
       ];
       array_push($reservations, $reservation);
@@ -122,8 +122,8 @@ $API['reservation'] = [
         'date' => $row['date'],
         'parent' => [
           'no' => $row['parent_no'],
-          'first_name' => $row['parent_first_name'],
-          'last_name' => $row['parent_last_name']
+          'firstName' => $row['parent_first_name'],
+          'lastName' => $row['parent_last_name']
         ],
         'item' => [
           'id' => $row['item_id'],
@@ -132,8 +132,8 @@ $API['reservation'] = [
         'copy' => [
           'price' => $row['copy_price'],
           'member' => [
-            'first_name' => $row['member_first_name'],
-            'last_name' => $row['member_last_name']
+            'firstName' => $row['member_first_name'],
+            'lastName' => $row['member_last_name']
           ],
           'transaction' => [[
             'code' => 'ADD',
@@ -173,8 +173,8 @@ $API['reservation'] = [
         ],
         'parent' => [
           'no' => $row['member_no'],
-          'first_name' => $row['member_first_name'],
-          'last_name' => $row['member_last_name']
+          'firstName' => $row['member_first_name'],
+          'lastName' => $row['member_last_name']
         ]
       ];
       array_push($reservations, $reservation);
@@ -257,8 +257,8 @@ $API['reservation'] = [
           'price' => $row['copy_price'],
           'member' => [
             'no' => $row['member_no'],
-            'first_name' => $row['member_first_name'],
-            'last_name' => $row['member_last_name']
+            'firstName' => $row['member_first_name'],
+            'lastName' => $row['member_last_name']
           ],
           'transaction' => [[
             'code' => 'ADD',

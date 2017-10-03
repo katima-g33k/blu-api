@@ -45,7 +45,7 @@ $API['copy'] = [
           'name' => $row['name'],
           'edition' => $row['edition'],
           'editor' => $row['editor'],
-          'is_book' => $isBook,
+          'isBook' => $isBook,
         ]
       ];
 
@@ -111,7 +111,7 @@ $API['copy'] = [
           'name' => $row['name'],
           'edition' => $row['edition'],
           'editor' => $row['editor'],
-          'is_book' => $isBook
+          'isBook' => $isBook
         ]
       ];
 
@@ -161,7 +161,7 @@ $API['copy'] = [
           'firstName' => $row['member_first_name'],
           'lastName' => $row['member_last_name'],
           'account'=> [
-            'last_activity' => $row['member_last_activity']
+            'lastActivity' => $row['member_last_activity']
           ]
         ],
         'transaction' => $API['transaction']['select']($row['id'])
