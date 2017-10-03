@@ -3,6 +3,11 @@ $API['item'] = [
   'delete' => function($data) {
     $id = $data['id'];
     $query = "DELETE FROM status_history WHERE item=$id;
+              DELETE FROM item_author WHERE item=$id;
+              DELETE FROM error WHERE item=$id;
+              DELETE FROM item_feed WHERE item=$id;
+              DELETE FROM reservation WHERE item=$id;
+              DELETE FROM storage WHERE item=$id;
               DELETE FROM item WHERE id=$id;";
 
     include '#/connection.php';
@@ -31,27 +36,31 @@ $API['item'] = [
   'insert' => function($data) {
     global $API;
     $item = $data['item'];
-    $item['is_book'] = isset($item['is_book']) && $item['is_book'] ? 1 : 0;
-    $authors = isset($item['author']) ? $item['author'] : false;
-    unset($item['author']);
-    $status = 'VALID';
-
-    $query = "INSERT INTO item SET";
-    foreach ($item as $key => $value) {
-      $query .= " $key='$value',";
-    }
-
-    $query .= " status=(SELECT id FROM status WHERE code='$status');";
+    $name = $item['name'];
+    $subject = $item['subject']['id'];
+    $publication = isset($item['publication']) ? $item['publication'] : null;
+    $edition = isset($item['edition']) ? $item['edition'] : null;
+    $editor = isset($item['editor']) ? $item['editor'] : null;
+    $ean13 = isset($item['ean13']) ? $item['ean13'] : null;
+    $isBook = $item['isBook'] ? 1 : 0;
+    $comment = $item['comment'];
+    $query = "INSERT INTO item(name, subject, publication, edition, editor, ean13, is_book, comment, status) 
+              VALUES (?,?,?,?,?,?,?,?,1);";
 
     include '#/connection.php';
-    mysqli_query($connection, $query) or die($query);
-    $id = mysqli_insert_id($connection);
+    $statement = mysqli_prepare($connection, $query);
+    mysqli_stmt_bind_param($statement, 'siiissis', $name, $subject, $publication, $edition, $editor, $ean13, $isBook, $comment);
+
+    mysqli_stmt_execute($statement);
+    $id = mysqli_stmt_insert_id($statement);
+
+    mysqli_stmt_close($statement);
     mysqli_close($connection);
 
-    $API['item']['updateStatus']([ 'id' => $id, 'status' => $status ]);
-    $authorList = $authors ? updateAuthors($id, $authors) : [];
+    $API['item']['updateStatus']([ 'id' => $id, 'status' => 'VALID' ]);
+    updateAuthors($id, $item['author']);
 
-    return array_merge(OPERATION_SUCCESSFUL, [ 'id' => $id ], [ 'author' => $authorList ]);
+    return array_merge(OPERATION_SUCCESSFUL, [ 'id' => $id ]);
   },
 
   'search' => function($data) {
@@ -59,44 +68,49 @@ $API['item'] = [
     $outdated = isset($data['outdated']) && $data['outdated'];
 
     $items = [];
-    $query = "SELECT item.id, name, edition, publication, editor, is_book, first_name, last_name
+    $query = "SELECT item.id, name, edition, publication, editor, is_book
               FROM item
-              INNER JOIN item_author
+              LEFT JOIN item_author
                 ON item.id = item_author.item
-              INNER JOIN author
+              LEFT JOIN author
                 ON item_author.author = author.id
-              WHERE (name LIKE '$search'
-              OR editor LIKE '$search'
-              OR CONCAT(first_name, ' ', last_name) LIKE '$search'
-              OR CONCAT(last_name, ' ', first_name) LIKE '$search')";
+              WHERE (name LIKE ?
+              OR editor LIKE ?
+              OR CONCAT(first_name, ' ', last_name) LIKE ?
+              OR CONCAT(last_name, ' ', first_name) LIKE ?)";
 
     if (!$outdated) {
-      $query .= " AND status = (SELECT id FROM status WHERE code ='VALID')";
+      $query .= " AND status = 1";
     }
 
     $query .= " GROUP BY item.id;";
 
-    include '#/connection.php';
-    $result = mysqli_query($connection, $query) or die("Query failed: '$query'");
-    mysqli_close($connection);
-
-    while($row = mysqli_fetch_assoc($result)) {
-      $isBook = $row['is_book'] != 0;
-
+    include "#/connection.php";
+    $statement = mysqli_prepare($connection, $query);
+    mysqli_stmt_bind_param($statement, 'ssss', $search, $search, $search, $search);
+  
+    mysqli_stmt_execute($statement);
+    mysqli_stmt_bind_result($statement, $id, $name, $publication, $edition, $editor, $isBook);
+  
+    $authors = [];
+    while (mysqli_stmt_fetch($statement)) {
       $item = [
-        'id' => $row['id'],
-        'name' => $row['name'],
-        'publication' => $row['publication'],
-        'edition' => $row['edition'],
-        'editor' => $row['editor'],
-        'is_book' => $isBook,
-        'author' => selectAuthor($row['id'])
+        'id' => $id,
+        'name' => $name,
+        'publication' => $publication,
+        'edition' => $edition,
+        'editor' => $editor,
+        'isBook' => $isBook === 1 ? true : false,
+        'author' => selectAuthor($id)
       ];
-
-      array_push($items, $item);
+  
+      array_push($items, $item);     
     }
-
+    
+    mysqli_stmt_close($statement);
+    mysqli_close($connection);
     return $items;
+
   },
 
   'list' => function() {
@@ -195,7 +209,7 @@ $API['item'] = [
     }
 
     $item = selectItem($data);
-    if (isset($item['is_book']) && $item['is_book']) {
+    if (isset($item['isBook']) && $item['isBook']) {
       $item['author'] = selectAuthor($item['id']);
     }
 
@@ -247,13 +261,11 @@ $API['item'] = [
   'update' => function($data) {
     $id = $data['id'];
     $item = $data['item'];
-    $authors = $item['author'];
-    unset($item['author']);
 
     updateItem($id, $item);
-    $authorList = updateAuthors($id, $authors);
+    updateAuthors($id, $item['author']);
 
-    return array_merge(OPERATION_SUCCESSFUL, [ 'author' => $authorList ]);
+    return OPERATION_SUCCESSFUL;
   },
 
   'update_comment' => function($data) {
@@ -311,22 +323,25 @@ $API['item'] = [
 ];
 
 function updateItem($id, $item) {
-  $count = 0;
-  $query = "UPDATE item SET";
+  $name = $item['name'];
+  $subject = $item['subject']['id'];
+  $publication = isset($item['publication']) ? $item['publication'] : null;
+  $edition = isset($item['edition']) ? $item['edition'] : null;
+  $editor = isset($item['editor']) ? $item['editor'] : null;
+  $ean13 = isset($item['ean13']) ? $item['ean13'] : null;
+  $isBook = $item['isBook'] ? 1 : 0;
+  $comment = $item['comment'];
+  $query = "UPDATE item
+            SET name=?, subject=?, publication=?, edition=?, editor=?, ean13=?, is_book=?, comment=?
+            WHERE id=?;";
 
-  foreach ($item as $field => $value) {
-    $count++;
-    $query .= " $field='$value'";
+  include "#/connection.php";
+  $statement = mysqli_prepare($connection, $query);
+  mysqli_stmt_bind_param($statement, 'siiissisi', $name, $subject, $publication, $edition, $editor, $ean13, $isBook, $comment, $id);
 
-    if ($count < count($item)) {
-      $query .= ',';
-    }
-  }
+  mysqli_stmt_execute($statement);
 
-  $query .= " WHERE id=$id;";
-
-  include '#/connection.php';
-  mysqli_query($connection, $query) or die(json_encode(INTERNAL_SERVER_ERROR));
+  mysqli_stmt_close($statement);
   mysqli_close($connection);
 }
 
@@ -339,8 +354,8 @@ function updateAuthors($itemId, $authors) {
   mysqli_close($connection);
 
   foreach ($authors as $author) {
-    $firstName = $author['first_name'];
-    $lastName = $author['last_name'];
+    $firstName = $author['firstName'];
+    $lastName = $author['lastName'];
 
     if (isset($author['id']) && $author['id'] !== 0) {
       $authorId = $author['id'];
@@ -362,8 +377,8 @@ function updateAuthors($itemId, $authors) {
 
       array_push($authorList, [
         'id' => $authorId,
-        'first_name' => $firstName,
-        'last_name' => $lastName
+        'firstName' => $firstName,
+        'lastName' => $lastName
       ]);
     }
   }
@@ -446,7 +461,7 @@ function selectItem($data) {
   ];
 
   if ($row['is_book'] == 1) {
-    $item['is_book'] = true;
+    $item['isBook'] = true;
   }
 
   if ($row['ean13'] != null) {

@@ -158,8 +158,8 @@ $API['copy'] = [
         'price' => $row['price'],
         'member' => [
           'no' => $row['member_no'],
-          'first_name' => $row['member_first_name'],
-          'last_name' => $row['member_last_name'],
+          'firstName' => $row['member_first_name'],
+          'lastName' => $row['member_last_name'],
           'account'=> [
             'last_activity' => $row['member_last_activity']
           ]
@@ -289,8 +289,8 @@ function handleReservation($copy, $item) {
     mysqli_multi_query($connection, $query) or die(json_encode(INTERNAL_SERVER_ERROR));
     $data = [
       'no' => $row['no'],
-      'first_name' => $row['first_name'],
-      'last_name' => $row['last_name'],
+      'firstName' => $row['first_name'],
+      'lastName' => $row['last_name'],
     ];
   }
 
