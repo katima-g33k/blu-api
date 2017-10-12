@@ -1,123 +1,124 @@
 <?php
-$API['employee'] = [
-  'delete' => function($data) {
-    $query = "DELETE FROM employee WHERE id = ?;";
+$employeeLogin = function($data = []) {
+  $username = isset($data['username']) ? $data['username'] : '';
+  $password = isset($data['password']) ? $data['password'] : '';
+  $query = "SELECT id, username, admin FROM employee WHERE username=? AND password=? AND active=1;";
 
-    include "#/connection.php";
-    $statement = mysqli_prepare($connection, $query);
-    mysqli_stmt_bind_param($statement,'i', $id);
+  include "#/connection.php";
+  $statement = mysqli_prepare($connection, $query);
+  mysqli_stmt_bind_param($statement, 'ss', $username, $password);
 
-    $id = $data['id'];
+  mysqli_stmt_execute($statement);
+  mysqli_stmt_bind_result($statement, $id, $username, $isAdmin);
+  mysqli_stmt_fetch($statement);
 
-    mysqli_stmt_execute($statement);
-    mysqli_stmt_close($statement);
-    mysqli_close($connection);
+  mysqli_stmt_close($statement);
+  mysqli_close($connection);
 
-    return OPERATION_SUCCESSFUL;
-  },
-  'insert' => function($data) {
-    $query = "INSERT INTO employee(username, password, admin, active) VALUES (?, ?, ?, ?);";
+  if ($id) {    
+    return [
+      'id' => $id,
+      'username' => $username,
+      'isAdmin' => $isAdmin == 1,
+    ];
+  }
 
-    include "#/connection.php";
-    $statement = mysqli_prepare($connection, $query);
-    mysqli_stmt_bind_param($statement,'ssii', $username, $password, $isAdmin, $isActive);
+  http_response_code(401);  
+  return ['message' => 'Invalid username and password'];
+};
 
-    $username = strip_tags($data['username']);
-    $password = $data['password'];
-    $isAdmin = isset($data['isAdmin']) && $data['isAdmin'] ? 1 : 0;
-    $isActive = isset($data['isActive']) && $data['isActive'] ? 1 : 0;
+$employeeList = function() {
+  $employees = [];
+  $query = "SELECT id, username, admin, active FROM employee";
 
-    mysqli_stmt_execute($statement);
+  include "#/connection.php";
+  $statement = mysqli_prepare($connection, $query);
 
-    $id = mysqli_insert_id($connection);
+  mysqli_stmt_execute($statement);
+  mysqli_stmt_bind_result($statement, $id, $username, $isAdmin, $isActive);
 
-    mysqli_stmt_close($statement);
-    mysqli_close($connection);
+  while (mysqli_stmt_fetch($statement)) {
+    array_push($employees, [
+      'id' => $id,
+      'username' => $username,
+      'isAdmin' => $isAdmin == 1,
+      'isActive' => $isActive == 1, 
+    ]);     
+  }
+  
+  mysqli_stmt_close($statement);
+  mysqli_close($connection);
+  return $employees;
+};
 
-    return $id;
-  },
-  'list' => function($data) {
-    $query = "SELECT id, username, admin, active FROM employee";
+$employeeDelete = function($params) {
+  $id = $params['id'];
+  $query = "DELETE FROM employee WHERE id=?;";
+  
+  include "#/connection.php";
+  $statement = mysqli_prepare($connection, $query);
+  mysqli_stmt_bind_param($statement,'i', $id);
+  
+  mysqli_stmt_execute($statement);
+  mysqli_stmt_close($statement);
+  mysqli_close($connection);  
+};
 
-    include "#/connection.php";
-    $statement = mysqli_prepare($connection, $query);
-
-    mysqli_stmt_execute($statement);
-    mysqli_stmt_bind_result($statement, $id, $username, $isAdmin, $isActive);
-
-    $employees = [];
-    while (mysqli_stmt_fetch($statement)) {
-       $employee = [
-        'id' => $id,
-        'username' => $username,
-        'isAdmin' => $isAdmin == 1,
-        'isActive' => $isActive == 1, 
-      ];
-      array_push($employees, $employee);     
+$employeeInsert = function($data = []) {
+  $required = ['username', 'password'];
+  foreach($required as $field) {
+    if (!isset($data[$field])) {
+      http_response_code(400);
+      return [ "message" => "Missing parameter '$field'" ];
     }
-    
-    mysqli_stmt_close($statement);
-    mysqli_close($connection);
-    return $employees;
-  },
-  'login' => function($data) {
-    $query = "SELECT id, username, admin FROM employee WHERE username=? AND password=? AND active=1;";
+  }
 
+  $username = $data['username'];
+  $password = $data['password'];
+  $isAdmin = isset($data['isAdmin']) && $data['isAdmin'] ? 1 : 0;
+  $query = "INSERT INTO employee(username, password, admin, active) VALUES (?,?,?,1);";
+  
+  include "#/connection.php";
+  $statement = mysqli_prepare($connection, $query);
+  mysqli_stmt_bind_param($statement,'ssi', $username, $password, $isAdmin);
+  mysqli_stmt_execute($statement);
+  
+  $id = mysqli_insert_id($connection);
+  
+  mysqli_stmt_close($statement);
+  mysqli_close($connection);
+  return [ 'id' => $id ];
+};
+
+$employeeUpdate = function($params, $data = []) {
+  if (!isset($data['username'])) {
+    http_response_code(400);
+    return [ "message" => "Missing parameter 'username'" ];
+  }
+
+  $id = $params['id'];  
+  $username = $data['username'];
+  $password = isset($data['password']) ? $data['password'] : false;
+  $isAdmin = isset($data['isAdmin']) && $data['isAdmin'] ? 1 : 0;
+  $isActive = isset($data['isActive']) && $data['isActive'] ? 1 : 0;
+  
+  if (isset($employee['password'])) {
+    $query = "UPDATE employee SET username=?, password=?, admin=?, active=? WHERE id=?;";
+  
     include "#/connection.php";
     $statement = mysqli_prepare($connection, $query);
-    mysqli_stmt_bind_param($statement,'ss', $username, $password);
+    mysqli_stmt_bind_param($statement,'ssiii', $username, $password, $isAdmin, $isActive, $id);
+  } else {
+    $query = "UPDATE employee SET username=?, admin=?, active=? WHERE id=?;";
+  
+    include "#/connection.php";
+    $statement = mysqli_prepare($connection, $query);
+    mysqli_stmt_bind_param($statement,'siii', $username, $isAdmin, $isActive, $id);
+  }
+  
+  mysqli_stmt_execute($statement);
 
-    $username = $data['username'];
-    $password = $data['password'];
-
-    mysqli_stmt_execute($statement);
-    mysqli_stmt_bind_result($statement, $id, $username, $isAdmin);
-    mysqli_stmt_fetch($statement);
-
-    if ($id) {
-      $employee = [
-        'id' => $id,
-        'username' => $username,
-        'isAdmin' => $isAdmin == 1,
-      ];
-
-      mysqli_stmt_close($statement);
-      mysqli_close($connection);
-      return $employee;
-    }
-
-    mysqli_stmt_close($statement);
-    mysqli_close($connection);
-    return UNAUTHORIZED;
-  },
-  'update' => function($data) {
-    $id = $data['id'];
-    $employee = $data['employee'];
-
-    $username = $employee['username'];
-    $password = isset($employee['password']) ? $employee['password'] : false;
-    $isAdmin = isset($employee['isAdmin']) && $employee['isAdmin'] ? 1 : 0;
-    $isActive = isset($employee['isActive']) && $employee['isActive'] ? 1 : 0;
-
-    if (isset($employee['password'])) {
-      $query = "UPDATE employee SET username=?, password=?, admin=?, active=? WHERE id=?;";
-
-      include "#/connection.php";
-      $statement = mysqli_prepare($connection, $query);
-      mysqli_stmt_bind_param($statement,'ssiii', $username, $password, $isAdmin, $isActive, $id);
-    } else {
-      $query = "UPDATE employee SET username=?, admin=?, active=? WHERE id=?;";
-
-      include "#/connection.php";
-      $statement = mysqli_prepare($connection, $query);
-      mysqli_stmt_bind_param($statement,'siii', $username, $isAdmin, $isActive, $id);
-    }
-
-    mysqli_stmt_execute($statement);
-    mysqli_stmt_close($statement);
-    mysqli_close($connection);
-
-    return OPERATION_SUCCESSFUL;
-  },
-];
+  mysqli_stmt_close($statement);
+  mysqli_close($connection);
+};
 ?>

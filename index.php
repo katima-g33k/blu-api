@@ -1,80 +1,72 @@
 <?php
+require_once '#/const.php';
+
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Access-Control-Allow-Headers, Access-Control-Allow-Methods, Access-Control-Allow-Origin');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Content-Type: application/json;charset=utf-8');
 
-$API = [];
-$req = null;
-
-require_once '#/const.php';
-
-require_once '#/category.php';
-require_once '#/comment.php';
-require_once '#/copy.php';
-require_once '#/employee.php';
-require_once '#/item.php';
-require_once '#/member.php';
-require_once '#/reservation.php';
-require_once '#/state.php';
-require_once '#/statistics.php';
-require_once '#/storage.php';
-require_once '#/subject.php';
-require_once '#/transaction.php';
-
-if (isset($_POST['req'])) {
-  $req = json_decode($_POST['req'], true);
-} else if (isset($_GET['req'])) {
-  $req = json_decode($_GET['req'], true);
-}
-
-$apiKey = '';
-if (isset(getallheaders()['X-Authorization'])) {
-  $apiKey = getallheaders()['X-Authorization'];
-} else if (isset($req['api-key'])) {
-  $apiKey = $req['api-key'];
-}
-
 if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
   http_response_code(200);
   echo json_encode([]);
-} else if (isValidRequest($req)) {
-  if ($apiKey == API_KEY) {
-    echo json_encode([ 'data' => $API[$req['object']][$req['function']](sanatize($req['data'])) ]);
+  return;
+}
+
+// Check API key
+$apiKey = isset(getallheaders()['X-Authorization']) ? getallheaders()['X-Authorization'] : '';
+if (API_KEY != $apiKey) {
+  http_response_code(401);
+  echo json_encode([ 'message' => 'Invalid API key' ]);
+  return;
+}
+
+require_once '#/routes.php';
+foreach ($routes[$_SERVER['REQUEST_METHOD']] as $route) {
+  $regex = '/^' . preg_replace('/\d+/', ':(\w+)', str_replace('/', '\/', $_SERVER['PATH_INFO'])) . '$/';
+  if (preg_match($regex, $route['url'], $paramKeys) == 1) {
+    $apiCall = $route;
+    break;
+  }
+}
+
+if (!isset($apiCall)) {
+  http_response_code(404);
+  echo json_encode([ 'message' => 'Invalid API URL' ]);
+  return;  
+}
+
+$params = [];
+preg_match_all('/(\d+)/', $_SERVER['PATH_INFO'], $paramValues, PREG_PATTERN_ORDER);
+
+if (preg_match($regex, $apiCall['url'], $paramKeys) == 1) {
+  for ($i = 1; $i < count($paramKeys); $i++) {
+    $params[$paramKeys[$i]] = (int)$paramValues[0][$i - 1];
+  }
+}
+
+switch ($_SERVER['REQUEST_METHOD']) {
+  case 'GET':
+    $data = $_GET;
+    break;
+  case 'POST':
+    $data = array_merge(json_decode(file_get_contents('php://input'), true), $_POST);
+    break;
+  default:
+    $data = [];
+}
+
+try {
+  if (count($params) > 0 && count($data) > 0) {
+    echo json_encode($apiCall['fn']($params, $data));    
+  } else if (count($params) > 0) {
+    echo json_encode($apiCall['fn']($params));
+  } else if (count($data) > 0) {
+    echo json_encode($apiCall['fn']($data));    
   } else {
-    http_response_code(403);
-    echo json_encode([ 'data' => INVALID_API_KEY ]);
+    echo json_encode($apiCall['fn']());    
   }
-} else {
-  http_response_code(400);
-  echo json_encode([ 'data' => BAD_REQUEST ]);
-}
-
-function isValidRequest($req) {
-  $keys = ['object', 'function', 'data'];
-
-  if ($req == null) {
-    return false;
-  }
-
-  foreach ($keys as $key) {
-    if (!isset($req[$key])) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-function sanatize($data) {
-  foreach ($data as $key => $value) {
-    if (is_array($value)) {
-      $data[$key] = sanatize($value);
-    } else if (is_string($value)) {
-      $data[$key] = str_replace("'", "''", $value);
-    }
-  }
-
-  return $data;
+} catch (Exception $e) {
+  http_response_code(500);
+  echo json_encode([ 'data' => $e ]);
 }
 ?>

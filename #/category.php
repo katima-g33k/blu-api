@@ -1,44 +1,49 @@
 <?php
-$API['category'] = [
-  'select' => function() {
-    $categories = [];
-    $query = "SELECT id, name FROM category ORDER BY name ASC;";
+// Public API functions
+$getCategory = function() {
+  $categories = [];
+  $query = "SELECT id, name FROM category ORDER BY name ASC;";
 
-    include '#/connection.php';
-    $result = mysqli_query($connection, $query) or die(INTERNAL_SERVER_ERROR);
-    mysqli_close($connection);
-
-    while($row = mysqli_fetch_assoc($result)) {
-      $category = [
-        'id' => $row['id'],
-        'name' => $row['name'],
-        'subject' => getSubjects($row['id'])
-      ];
-
-      array_push($categories, $category);
-    };
-
-    return $categories;
+  include "#/connection.php";
+  $statement = mysqli_prepare($connection, $query);
+  mysqli_stmt_execute($statement);
+  mysqli_stmt_bind_result($statement, $id, $name);
+  
+  while (mysqli_stmt_fetch($statement)) {
+    array_push($categories, [
+      'id' => $id,
+      'name' => $name,
+      'subject' => getSubjects($id)
+    ]);
   }
-];
 
+
+  mysqli_stmt_close($statement);
+  mysqli_close($connection);
+  return $categories;
+};
+
+// Private ressource functions
 function getSubjects($category) {
   $subjects = [];
-  $query = "SELECT id, name FROM subject WHERE category = $category ORDER BY name ASC;";
+  $query = "SELECT id, name FROM subject WHERE category=? ORDER BY name ASC;";
 
   include '#/connection.php';
-  $result = mysqli_query($connection, $query) or die(INTERNAL_SERVER_ERROR);
-  mysqli_close($connection);
+  $statement = mysqli_prepare($connection, $query);
+  mysqli_stmt_bind_param($statement, 'i', $category);
 
-  while($row = mysqli_fetch_assoc($result)) {
-    $subject = [
-      'id' => $row['id'],
-      'name' => $row['name']
-    ];
+  mysqli_stmt_execute($statement);
+  mysqli_stmt_bind_result($statement, $id, $name);
 
-    array_push($subjects, $subject);
+  while(mysqli_stmt_fetch($statement)) {    
+    array_push($subjects, [
+      'id' => $id,
+      'name' => $name
+    ]);
   };
 
+  mysqli_stmt_close($statement);
+  mysqli_close($connection);
   return $subjects;
 }
 ?>

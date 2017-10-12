@@ -1,18 +1,23 @@
 <?php
-$API['state'] = [
-  'select' => function() {
-    $states = [];
-    $query = "SELECT code FROM state";
+$stateList = function() {
+  $states = [];
+  $query = "SELECT code, name FROM state";
 
-    include '#/connection.php';
-    $result = mysqli_query($connection, $query) or die(INTERNAL_SERVER_ERROR);
-    mysqli_close($connection);
+  include "#/connection.php";
+  $statement = mysqli_prepare($connection, $query);
 
-    while($row = mysqli_fetch_assoc($result)) {
-      array_push($states, $row['code']);
-    }
+  mysqli_stmt_execute($statement);
+  mysqli_stmt_bind_result($statement, $code, $name);
 
-    return $states;
+  while (mysqli_stmt_fetch($statement)) {
+    array_push($states, [
+      'code' => $code,
+      'name' => $name
+    ]);     
   }
-];
+  
+  mysqli_stmt_close($statement);
+  mysqli_close($connection);
+  return $states;
+};
 ?>
