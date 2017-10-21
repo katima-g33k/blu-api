@@ -121,8 +121,8 @@ var APIClient = function () {
         exists: function exists(ean13) {
           return call('GET', '/item/exists/' + ean13);
         },
-        get: function get(id) {
-          return call('GET', '/item/' + id);
+        get: function get(id, options) {
+          return call('GET', '/item/' + id, options);
         },
         getName: function getName(ean13) {
           return call('GET', '/item/name/' + ean13);
@@ -147,7 +147,10 @@ var APIClient = function () {
         },
         storage: {
           clear: function clear() {
-            return call('DELETE', 'item/storage');
+            return call('DELETE', '/item/storage');
+          },
+          list: function list() {
+            return call('GET', '/item/storage');
           },
           set: function set(id, storage) {
             return call('POST', '/item/' + id + '/storage', { storage: storage });
@@ -178,14 +181,14 @@ var APIClient = function () {
             return call('DELETE', '/member/copy/' + id);
           },
           insert: function insert(memberNo, itemId, price) {
-            return call('POST', 'member/' + memberNo + '/copy', { item: itemId, price: price });
+            return call('POST', '/member/' + memberNo + '/copy', { item: itemId, price: price });
           },
           update: function update(id, price) {
             return call('POST', '/member/copy/' + id, { price: price });
           },
           transaction: {
             delete: function _delete(copyId, type) {
-              return call('DELETE', 'member/copy/' + copyId + '/transaction', { type: type });
+              return call('DELETE', '/member/copy/' + copyId + '/transaction', { type: type });
             },
             insert: function insert(memberNo, copyId, type) {
               return call('POST', '/member/' + memberNo + '/copy/' + copyId + '/transaction', { type: type });
@@ -200,7 +203,7 @@ var APIClient = function () {
             return call('GET', '/member/duplicates');
           },
           merge: function merge(duplicate, no) {
-            return call('GET', 'member/' + duplicate + '/merger/' + no);
+            return call('GET', '/member/' + duplicate + '/merge/' + no);
           }
         },
         exists: function exists(_ref2) {
