@@ -1,27 +1,20 @@
 <?php
 // Public API functions
-$transactionDelete = function($data = []) {
-  $required = ['copy', 'type'];
-  foreach($required as $field) {
-    if (!isset($data[$field])) {
-      http_response_code(400);
-      return [ "message" => "Missing parameter '$field'" ];
-    }
+$transactionDelete = function($params, $data = []) {
+  if (!isset($data['type'])) {
+    http_response_code(400);
+    return [ "message" => "Missing parameter 'type'" ];
   }
 
-  deleteTransaction($data['copy'], $data['type']);
+  deleteTransaction($params['copyId'], $data['type']);
 };
 
-$transactionInsert = function($data = []) {
-  $required = ['copy', 'type', 'member'];
-  foreach($required as $field) {
-    if (!isset($data[$field])) {
-      http_response_code(400);
-      return [ "message" => "Missing parameter '$field'" ];
-    }
+$transactionInsert = function($params, $data = []) {
+  if (!isset($data['type'])) {
+    http_response_code(400);
+    return [ "message" => "Missing parameter 'type'" ];
   }
-
-  insertTransaction($data['member'], $data['copy'], $data['type']);
+  insertTransaction($params['memberNo'], $params['copyId'], $data['type']);
 };
 
 
@@ -40,7 +33,7 @@ function selectTransactions($copy) {
               ON transaction.member = member.no
             WHERE copy=?;";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'i', $copy);
 
@@ -77,7 +70,7 @@ function insertTransaction($member, $copy, $type) {
   $query = "INSERT INTO transaction(type, member, copy, date)
   VALUES ((SELECT id FROM transaction_type WHERE code=?),?,?,CURRENT_TIMESTAMP);";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'sii', $type, $member, $copy);
   mysqli_stmt_execute($statement);
@@ -91,10 +84,10 @@ function insertTransaction($member, $copy, $type) {
 }
 
 function batchInsertTransactions($member, $copies, $type) {
-  $query .= "INSERT INTO transaction(type, member, copy, date)
-             VALUES ((SELECT id FROM transaction_type WHERE code='$type'), $member, $copy, CURRENT_TIMESTAMP);";
+  $query = "INSERT INTO transaction(type, member, copy, date)
+             VALUES ((SELECT id FROM transaction_type WHERE code=?), ?, ?, CURRENT_TIMESTAMP);";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'sii', $type, $member, $copy);
 
@@ -108,24 +101,14 @@ function batchInsertTransactions($member, $copies, $type) {
 }
 
 function deleteTransaction($copy, $type) {
-  include '#/connection.php';
+  $type = $type == "SELL_PARENT" ? "SELL%" : ($type . "%");
+  $query = "DELETE FROM transaction
+            WHERE copy=?
+            AND type IN (SELECT id FROM transaction_type WHERE code LIKE ?);";
 
-  if ($type == "SELL" || $type == "SELL_PARENT") {
-    $query = "DELETE FROM transaction
-              WHERE copy=?
-              AND (type=(SELECT id FROM transaction_type WHERE code='SELL')
-                OR type=(SELECT id FROM transaction_type WHERE code='SELL_PARENT'));";
-
-    $statement = mysqli_prepare($connection, $query);
-    mysqli_stmt_bind_param($statement, 'i', $copyId);  
-  } else {
-    $query = "DELETE FROM transaction
-              WHERE copy=?
-              AND type=(SELECT id FROM transaction_type WHERE code=?);";
-
-    $statement = mysqli_prepare($connection, $query);
-    mysqli_stmt_bind_param($statement, 'is', $copyId, $type);  
-  }
+  $connection = getConnection();
+  $statement = mysqli_prepare($connection, $query);
+  mysqli_stmt_bind_param($statement, 'is', $copy, $type);
 
   mysqli_stmt_execute($statement);
   mysqli_stmt_close($statement);

@@ -3,7 +3,7 @@ $stateList = function() {
   $states = [];
   $query = "SELECT code, name FROM state";
 
-  include "#/connection.php";
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
 
   mysqli_stmt_execute($statement);

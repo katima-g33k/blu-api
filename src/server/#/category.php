@@ -4,7 +4,7 @@ $getCategory = function() {
   $categories = [];
   $query = "SELECT id, name FROM category ORDER BY name ASC;";
 
-  include "#/connection.php";
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_execute($statement);
   mysqli_stmt_bind_result($statement, $id, $name);
@@ -28,7 +28,7 @@ function getSubjects($category) {
   $subjects = [];
   $query = "SELECT id, name FROM subject WHERE category=? ORDER BY name ASC;";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'i', $category);
 

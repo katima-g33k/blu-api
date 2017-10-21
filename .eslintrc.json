@@ -1,0 +1,14 @@
+{
+  "parser": "babel-eslint",
+  "parserOptions": {},
+  "env": {
+    "node": true
+  },
+  "plugins": [],
+  "extends": ["airbnb-base"],
+  "settings": {},
+  "rules": {
+    "indent": ["error", 2, { "SwitchCase": 1 }],
+    "import/no-extraneous-dependencies": ["error", { "devDependencies": true }]
+  }
+}

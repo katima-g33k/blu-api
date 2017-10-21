@@ -4,7 +4,7 @@ $employeeLogin = function($data = []) {
   $password = isset($data['password']) ? $data['password'] : '';
   $query = "SELECT id, username, admin FROM employee WHERE username=? AND password=? AND active=1;";
 
-  include "#/connection.php";
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'ss', $username, $password);
 
@@ -15,7 +15,7 @@ $employeeLogin = function($data = []) {
   mysqli_stmt_close($statement);
   mysqli_close($connection);
 
-  if ($id) {    
+  if ($id) {
     return [
       'id' => $id,
       'username' => $username,
@@ -31,7 +31,7 @@ $employeeList = function() {
   $employees = [];
   $query = "SELECT id, username, admin, active FROM employee";
 
-  include "#/connection.php";
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
 
   mysqli_stmt_execute($statement);
@@ -55,7 +55,7 @@ $employeeDelete = function($params) {
   $id = $params['id'];
   $query = "DELETE FROM employee WHERE id=?;";
   
-  include "#/connection.php";
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement,'i', $id);
   
@@ -78,7 +78,7 @@ $employeeInsert = function($data = []) {
   $isAdmin = isset($data['isAdmin']) && $data['isAdmin'] ? 1 : 0;
   $query = "INSERT INTO employee(username, password, admin, active) VALUES (?,?,?,1);";
   
-  include "#/connection.php";
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement,'ssi', $username, $password, $isAdmin);
   mysqli_stmt_execute($statement);
@@ -105,13 +105,13 @@ $employeeUpdate = function($params, $data = []) {
   if (isset($employee['password'])) {
     $query = "UPDATE employee SET username=?, password=?, admin=?, active=? WHERE id=?;";
   
-    include "#/connection.php";
+    $connection = getConnection();
     $statement = mysqli_prepare($connection, $query);
     mysqli_stmt_bind_param($statement,'ssiii', $username, $password, $isAdmin, $isActive, $id);
   } else {
     $query = "UPDATE employee SET username=?, admin=?, active=? WHERE id=?;";
   
-    include "#/connection.php";
+    $connection = getConnection();
     $statement = mysqli_prepare($connection, $query);
     mysqli_stmt_bind_param($statement,'siii', $username, $isAdmin, $isActive, $id);
   }
@@ -121,4 +121,36 @@ $employeeUpdate = function($params, $data = []) {
   mysqli_stmt_close($statement);
   mysqli_close($connection);
 };
+
+function isAdmin($username, $password) {
+  $query = "SELECT id from employee WHERE username=? AND password=? AND admin=1 AND active=1;";
+  
+  $connection = getConnection();
+  $statement = mysqli_prepare($connection, $query);
+  mysqli_stmt_bind_param($statement, 'ss', $username, $password);
+
+  mysqli_stmt_execute($statement);
+  mysqli_stmt_bind_result($statement, $id);
+  mysqli_stmt_fetch($statement);
+
+  mysqli_stmt_close($statement);
+  mysqli_close($connection);
+  return $id;
+}
+
+function isEmployee($username, $password) {
+  $query = "SELECT id from employee WHERE username=? AND password=? AND active=1;";
+  
+  $connection = getConnection();
+  $statement = mysqli_prepare($connection, $query);
+  mysqli_stmt_bind_param($statement, 'ss', $username, $password);
+
+  mysqli_stmt_execute($statement);
+  mysqli_stmt_bind_result($statement, $id);
+  mysqli_stmt_fetch($statement);
+
+  mysqli_stmt_close($statement);
+  mysqli_close($connection);
+  return $id;
+}
 ?>

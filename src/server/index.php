@@ -1,9 +1,10 @@
 <?php
 require_once '#/const.php';
+require_once '#/connection.php';
 
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Access-Control-Allow-Headers, Access-Control-Allow-Methods, Access-Control-Allow-Origin');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, authorization, Accept, Access-Control-Allow-Headers, Access-Control-Allow-Methods, Access-Control-Allow-Origin,  X-Authorization');
+header('Access-Control-Allow-Methods: DELETE, GET, POST, PUT, OPTIONS');
 header('Content-Type: application/json;charset=utf-8');
 
 if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
@@ -12,8 +13,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
   return;
 }
 
-// Check API key
 $apiKey = isset(getallheaders()['X-Authorization']) ? getallheaders()['X-Authorization'] : '';
+$username = isset($_SERVER['PHP_AUTH_USER']) ? $_SERVER['PHP_AUTH_USER'] : '';
+$password = isset($_SERVER['PHP_AUTH_PW']) ? $_SERVER['PHP_AUTH_PW'] : '';
+
+// Check API key
 if (API_KEY != $apiKey) {
   http_response_code(401);
   echo json_encode([ 'message' => 'Invalid API key' ]);
@@ -35,6 +39,18 @@ if (!isset($apiCall)) {
   return;  
 }
 
+if ($apiCall['type'] == 'admin' && !isAdmin($username, $password)) {
+  http_response_code(401);
+  echo json_encode([ 'message' => 'Unauthaurized user' ]);
+  return;
+}
+
+if ($apiCall['type'] == 'employee' && !isEmployee($username, $password)) {
+  http_response_code(401);
+  echo json_encode([ 'message' => 'Unauthaurized user' ]);
+  return;
+}
+
 $params = [];
 preg_match_all('/(\d+)/', $_SERVER['PATH_INFO'], $paramValues, PREG_PATTERN_ORDER);
 
@@ -45,10 +61,12 @@ if (preg_match($regex, $apiCall['url'], $paramKeys) == 1) {
 }
 
 switch ($_SERVER['REQUEST_METHOD']) {
+  case 'DELETE':
   case 'GET':
     $data = $_GET;
     break;
   case 'POST':
+  case 'PUT':
     $data = array_merge(json_decode(file_get_contents('php://input'), true), $_POST);
     break;
   default:

@@ -19,7 +19,7 @@ $reservationInsert = function($data = []) {
   $itemId = $data['item'];
   $query = "INSERT INTO reservation(member, item, date) VALUES (?,?,CURRENT_TIMESTAMP);";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'ii', $memberNo, $itemId);
 
@@ -45,7 +45,7 @@ $reservationList = function() {
             INNER JOIN item
               ON reservation.item=item.id;";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement1 = mysqli_prepare($connection, $query);
 
   mysqli_stmt_execute($statement1);
@@ -151,9 +151,9 @@ function selectReservationsForMember($memberNo) {
               ON reservation.item = item.id
             WHERE reservation.member=?;";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement1 = mysqli_prepare($connection, $query);
-  mysqli_stmt_bind_param($statement1, $memberNo);
+  mysqli_stmt_bind_param($statement1, 'i',$memberNo);
 
   mysqli_stmt_execute($statement1);
   mysqli_stmt_bind_result($statement1, $id, $date, $itemId, $itemName);
@@ -199,13 +199,13 @@ function selectReservationsForMember($memberNo) {
                                     WHERE code='ADD')
             ) m
               ON c.id=m.copy
-            WHERE t.member=$memberNo
+            WHERE t.member=?
             AND t.type=(SELECT id
                         FROM transaction_type
                         WHERE code='RESERVE');";
 
   $statement2 = mysqli_prepare($connection, $query);
-  mysqli_stmt_bind_param($statement2, $memberNo);
+  mysqli_stmt_bind_param($statement2, 'i', $memberNo);
 
   mysqli_stmt_execute($statement2);
   mysqli_stmt_bind_result($statement2, $id, $date, $copyId, $copyPrice, $itemId,
@@ -253,7 +253,7 @@ function selectReservationsForItem($itemId) {
               ON reservation.member=member.no
             WHERE reservation.item=?;";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'i', $itemId);
 
@@ -287,7 +287,7 @@ function clearReservations() {
                         FROM transaction_type
                         WHERE code='RESERVE');";
 
-  include '#/connection.php';
+  $connection = getConnection();
   if (!mysqli_multi_query($connection, $query)) {
     http_response_code(500);
   }
@@ -298,7 +298,7 @@ function clearReservations() {
 function deleteReservation($memberNo, $itemId) {
   $query = "DELETE FROM reservation WHERE member=? AND item=?;";
   
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'ii', $memberNo, $itemId);
   mysqli_stmt_execute($statement);
@@ -315,7 +315,7 @@ function deleteReservationRange($from, $to) {
                         WHERE code='RESERVE'
                         AND date BETWEEN $from AND $to);";
 
-  include '#/connection.php';
+  $connection = getConnection();
   if (!mysqli_multi_query($connection, $query)) {
     http_response_code(500);
   }

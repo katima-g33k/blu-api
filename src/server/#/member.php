@@ -10,7 +10,7 @@ $deleteMember = function($params) {
             DELETE FROM transaction WHERE member=$no AND type=(SELECT id FROM transaction_type WHERE code='RESERVE');
             DELETE FROM member WHERE no=$no;";
 
-  include '#/connection.php';
+  $connection = getConnection();
 
   if (!mysqli_multi_query($connection, $query)) {
     http_response_code(500);
@@ -48,10 +48,9 @@ $memberSearch = function($data = []) {
     http_response_code(400);
     return [ 'message' => 'Missing parameter \'search\'' ];
   }
-
   $search = '%' . str_replace(' ', '%', $data['search']) . '%';
-  $deactivated = isset($data['deactivated']) && $data['deactivated'];
-  $isParent = isset($data['isParent']) && $data['isParent'];
+  $deactivated = isset($data['deactivated']) && $data['deactivated'] === 'true';
+  $isParent = isset($data['isParent']) && $data['isParent'] === 'true';
   $members = [];
   $query = "SELECT no, first_name, last_name, email
             FROM member
@@ -68,7 +67,7 @@ $memberSearch = function($data = []) {
     $query .= " AND is_parent=1";
   }
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'ssss', $search, $search, $search, $search);
 
@@ -76,14 +75,12 @@ $memberSearch = function($data = []) {
   mysqli_stmt_bind_result($statement, $no, $firstName, $lastName, $email);
   
   while(mysqli_stmt_fetch($statement)) {
-    $member = [
+    array_push($members, [
       'no' => $no,
       'firstName' => $firstName,
       'lastName' => $lastName,
       'email' => $email
-    ];
-
-    array_push($members, $member);
+    ]);
   }
 
   mysqli_stmt_close($statement);
@@ -140,7 +137,7 @@ $memberCommentInsert = function($params, $data = []) {
   $query = "INSERT INTO comment(comment, member, updated_at, updated_by)
             VALUES (?,?,CURRENT_TIMESTAMP,?);";
   
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'sii', $comment, $no, $employee);
 
@@ -168,7 +165,7 @@ $memberCommentUpdate = function($params, $data = []) {
                 updated_by=?
             WHERE id=?;";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'sii', $comment, $employee, $id);
   mysqli_stmt_execute($statement);
@@ -181,7 +178,7 @@ $memberCommentDelete = function($params) {
   $id = $params['id'];
   $query = "DELETE FROM comment WHERE id=?;";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'i', $id);
   mysqli_stmt_execute($statement);
@@ -200,7 +197,7 @@ $memberPay = function($params) {
                           WHERE member=?
                           AND type=(SELECT id FROM transaction_type WHERE code='PAY'));";
   
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'ii', $no, $no);
 
@@ -219,11 +216,39 @@ $memberPay = function($params) {
   renewMember($no);
 };
 
+$memberTransfer = function($params) {
+  $no = $params['no'];
+  $query = "SELECT copy FROM transaction
+            WHERE member=?
+            AND type=(SELECT id FROM transaction_type WHERE code='ADD')
+            AND copy NOT IN(SELECT copy FROM transaction
+                          WHERE member=?
+                          AND type IN (SELECT id FROM transaction_type WHERE code IN ('PAY', 'DONATE', 'AJUST_INVENTORY')));";
+  
+  $connection = getConnection();
+  $statement = mysqli_prepare($connection, $query);
+  mysqli_stmt_bind_param($statement, 'ii', $no, $no);
+
+  mysqli_stmt_execute($statement);
+  mysqli_stmt_bind_result($statement, $copy);
+
+  $copies = [];
+  while(mysqli_stmt_fetch($statement)) {
+    array_push($copies, $copy);
+  }
+  
+  mysqli_stmt_close($statement);
+  mysqli_close($connection);
+
+  batchInsertTransactions($no, $copies, 'DONATE');
+  renewMember($no);
+};
+
 $memberName = function($params) {
   $no = $params['no'];
   $query = "SELECT first_name, last_name FROM member WHERE no=?";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'i', $no);
 
@@ -240,17 +265,9 @@ $memberName = function($params) {
   ];
 };
 
-$memberMerge = function ($data = []) {
-  $required = ['no', 'duplicate'];
-  foreach($required as $field) {
-    if (!isset($data[$field])) {
-      http_response_code(400);
-      return [ "message" => "Missing parameter '$field'" ];
-    }
-  }
-
-  $no = $data['no'];
-  $duplicate = $data['duplicate'];
+$memberMerge = function ($params) {
+  $no = $params['no'];
+  $duplicate = $params['duplicate'];
   $dates = getDates($no, $duplicate);
   $registration = $dates['registration'];
   $lastActivity = $dates['lastActivity'];
@@ -263,9 +280,9 @@ $memberMerge = function ($data = []) {
             DELETE FROM phone WHERE member=$duplicate;
             DELETE FROM member WHERE no=$duplicate;";
 
-  include '#/connection.php';
+  $connection = getConnection();
 
-  if (mysqli_multi_query($connection, $query)) {
+  if (!mysqli_multi_query($connection, $query)) {
     http_response_code(500);
   }
 
@@ -285,7 +302,7 @@ $memberDuplicates = function() {
             OR no LIKE CONCAT('%', @no, '%')
             OR email IN (SELECT email FROM member GROUP BY email HAVING COUNT(no) > 1);";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
 
   mysqli_stmt_execute($statement);
@@ -316,7 +333,7 @@ $memberExists = function($data = []) {
   $no = isset($data['no']) ? $data['no'] : 0;
   $email = isset($data['email']) ? $data['email'] : '';
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'is', $no, $email);
 
@@ -359,7 +376,7 @@ $memberUpdateCopy = function ($params, $data = []) {
   $price = $data['price'];
   $query = "UPDATE copy SET price=? WHERE id=?;";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'ii', $price, $id);
 
@@ -374,7 +391,7 @@ $memberDeleteCopy = function ($params) {
   $query = "DELETE FROM transaction WHERE copy=$id;
             DELETE FROM copy WHERE id=$id;";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $result = mysqli_multi_query($connection, $query);
   mysqli_close($connection);
 
@@ -391,7 +408,7 @@ function getMemberComment($no) {
   $query = "SELECT id, comment, updated_at, updated_by
             FROM comment WHERE member=?";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'i', $no);
 
@@ -421,7 +438,7 @@ function getCityId($city) {
   $state = $city['state']['code'];
   $query = "SELECT id FROM city WHERE name=?;";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement1 = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement1, 's', $name);
 
@@ -451,7 +468,7 @@ function getDates($no, $duplicate) {
   $data = [];
   $query = "SELECT registration, last_activity FROM member WHERE no IN (?, ?);";
 
-  include "#/connection.php";
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'ii', $no, $duplicate);
 
@@ -476,7 +493,7 @@ function getDates($no, $duplicate) {
 function insertPhone($member, $number, $note) {
   $query = "INSERT INTO phone(member, number, note) VALUES (?,?,?);";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'iss', $member, $number, $note);
   mysqli_stmt_execute($statement);
@@ -493,7 +510,7 @@ function getTranferDates($no) {
             AND type=(SELECT id FROM transaction_type WHERE code='DONATE')
             ORDER BY date ASC;";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'i', $no);
 
@@ -512,7 +529,7 @@ function getTranferDates($no) {
 function deletePhones($member) {
   $query = "DELETE FROM phone WHERE member=?;";
 
-  include "#/connection.php";
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'i', $member);
 
@@ -535,7 +552,7 @@ function insertMember($data) {
   $zip = $data['zip'];
   $city = isset($data['city']) ? getCityId($data['city']) : null;
 
-  include "#/connection.php";
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'isssissi', $no, $firstName, $lastName, $email, $isParent, $address, $zip, $city);
 
@@ -560,7 +577,7 @@ function updateMember($id, $member) {
   $zip = $member['zip'];
   $city = isset($member['city']) ? getCityId($member['city']) : null;
 
-  include "#/connection.php";
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'isssissii', $no, $firstName, $lastName, $email, $isParent, $address, $zip, $city, $id);
 
@@ -589,7 +606,7 @@ function selectMember($no) {
             LEFT JOIN state ON city.state = state.code
             WHERE no=?";
 
-  include "#/connection.php";
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'i', $no);
 
@@ -628,7 +645,7 @@ function selectPhone($no) {
   $phones = [];
   $query = "SELECT id, number, note FROM phone WHERE member=?";
 
-  include '#/connection.php';  
+  $connection = getConnection();  
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'i', $no);
 
@@ -651,7 +668,7 @@ function selectPhone($no) {
 function fakeMemberNo() {
   $query = "SELECT no FROM member WHERE no LIKE '18%' ORDER BY no DESC LIMIT 1";
 
-  include '#/connection.php';  
+  $connection = getConnection();  
   $statement = mysqli_prepare($connection, $query);
 
   mysqli_stmt_execute($statement);
@@ -667,12 +684,12 @@ function fakeMemberNo() {
 function insertCopy($itemId, $price) {
   $query = "INSERT INTO copy(item, price) VALUES (?,?);";
 
-  include '#/connection.php';  
+  $connection = getConnection();  
   $statement = mysqli_prepare($connection, $query);
-  mysqli_stmt_bind_param($statement, $itemId, $price);
+  mysqli_stmt_bind_param($statement, 'ii', $itemId, $price);
   mysqli_stmt_execute($statement);
 
-  $id = mysqli_stmt_insert_id($connection);
+  $id = mysqli_stmt_insert_id($statement);
   
   mysqli_stmt_close($statement);
   mysqli_close($connection);
@@ -681,7 +698,7 @@ function insertCopy($itemId, $price) {
 
 function handleReservation($copy, $item) {
   $data = null;
-  include '#/connection.php';
+  $connection = getConnection();
 
   $query = "SELECT r.id,
                    r.member,
@@ -693,9 +710,9 @@ function handleReservation($copy, $item) {
             ORDER BY date ASC
             LIMIT 1;";
 
-  include '#/connection.php';  
+  $connection = getConnection();  
   $statement = mysqli_prepare($connection, $query);
-  mysqli_stmt_bind_param($statement, $item);
+  mysqli_stmt_bind_param($statement, 'i', $item);
 
   mysqli_stmt_execute($statement);
   mysqli_stmt_bind_result($statement, $id, $memberNo, $memberFirstName, $memberLastName);
@@ -730,7 +747,7 @@ function handleReservation($copy, $item) {
 function renewMember($no) {
   $query = "UPDATE member SET last_activity=CURRENT_TIMESTAMP WHERE no=?;";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'i', $no);  
   mysqli_stmt_execute($statement);
@@ -763,7 +780,7 @@ function selectDonations() {
                                         FROM transaction_type
                                         WHERE code='DONATE'));";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_result($statement, $id, $item, $price, $name, $isBook,
                      $edition, $editor, $statusDate, $statusCode);  
@@ -822,7 +839,7 @@ function selectCopiesForMember($no) {
                                           FROM transaction_type
                                           WHERE code='DONATE'))";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'ii', $no, $no);
 

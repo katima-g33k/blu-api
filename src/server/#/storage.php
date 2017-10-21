@@ -2,7 +2,7 @@
 $storageDelete = function() {
   $query = "DELETE FROM storage;";
 
-  include "#/connection.php";
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_execute($statement);
   
@@ -16,7 +16,7 @@ $storageList = function() {
             FROM storage
             INNER JOIN item ON storage.item=item.id;";
 
-  include "#/connection.php";
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
 
   mysqli_stmt_execute($statement);

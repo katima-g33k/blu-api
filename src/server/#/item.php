@@ -4,7 +4,7 @@ $itemExists = function($params) {
   $ean13 = $params['ean13'];
   $query = "SELECT id FROM item WHERE ean13=?";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 's', $ean13);
 
@@ -39,7 +39,7 @@ $getItem = function($params) {
             INNER JOIN category ON subject.category=category.id
             WHERE item.id=?";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'i', $id);
 
@@ -80,7 +80,7 @@ $getItemName = function($params) {
   $ean13 = $params['ean13'];
   $query = "SELECT id, name FROM item WHERE ean13=?;";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 's', $ean13);
 
@@ -121,7 +121,7 @@ $itemUpdateStorage = function($params, $data = []) {
     $query .= "INSERT INTO storage(no, item) VALUES($no, $id);";
   }
 
-  include '#/connection.php';
+  $connection = getConnection();
   if (!mysqli_multi_query($connection, $query)) {
     http_response_code(500);
   }
@@ -139,7 +139,7 @@ $itemDelete = function($params) {
             DELETE FROM storage WHERE item=$id;
             DELETE FROM item WHERE id=$id;";
 
-  include '#/connection.php';
+  $connection = getConnection();
   if (!mysqli_multi_query($connection, $query)) {
     http_response_code(500);
   }
@@ -172,7 +172,7 @@ $itemInsert = function($data = []) {
   $query = "INSERT INTO item(name, subject, publication, edition, editor, ean13, is_book, comment, status) 
             VALUES (?,?,?,?,?,?,?,?,1);";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'siiissis', $name, $subject, $publication, $edition, $editor, $ean13, $isBook, $comment);
 
@@ -185,7 +185,7 @@ $itemInsert = function($data = []) {
   updateItemStatus($id, 'VALID');
 
   if ($data['isBook']) {
-    updateAuthors($id, $item['author']);
+    updateAuthors($id, $data['author']);
   }
 
   return [ 'id' => $id ];
@@ -218,7 +218,7 @@ $itemUpdate = function($params, $data = []) {
             SET name=?, subject=?, publication=?, edition=?, editor=?, ean13=?, is_book=?, comment=?
             WHERE id=?;";
 
-  include "#/connection.php";
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'siiissisi', $name, $subject, $publication, $edition, $editor, $ean13, $isBook, $comment, $id);
 
@@ -228,21 +228,13 @@ $itemUpdate = function($params, $data = []) {
   mysqli_close($connection);
 
   if ($data['isBook']) {
-    updateAuthors($id, $item['author']);
+    updateAuthors($id, $data['author']);
   }
 };
 
-$itemMerge = function($data) {
-  $required = ['id', 'duplicate'];
-  foreach($required as $field) {
-    if (!isset($data[$field])) {
-      http_response_code(400);
-      return [ "message" => "Missing parameter '$field'" ];
-    }
-  }
-
-  $id = $data['id'];
-  $duplicate = $data['duplicate'];
+$itemMerge = function($params) {
+  $id = $params['id'];
+  $duplicate = $params['duplicate'];
   $query = "UPDATE copy SET item=$id WHERE item=$duplicate;
             UPDATE reservation SET item=$id WHERE item=$duplicate;
             UPDATE item_feed SET item=$id WHERE item=$duplicate;
@@ -252,7 +244,7 @@ $itemMerge = function($data) {
             DELETE FROM storage WHERE item=$duplicate;
             DELETE FROM item WHERE id=$duplicate;";
 
-  include '#/connection.php';
+  $connection = getConnection();
   if (!mysqli_multi_query($connection, $query)) {
     http_response_code(500);
   }
@@ -262,54 +254,47 @@ $itemMerge = function($data) {
 
 // Private ressources functions
 function updateAuthors($itemId, $authors) {
-  include '#/connection.php';
+  $connection = getConnection();
   $authorList = [];
 
-  $query = "DELETE FROM item_author WHERE item=$itemId";
-  
-  if (!mysqli_query($connection, $query)) {
-    http_response_code(500);
-    mysqli_close($connection);
-    return;
-  }
+  $query = "DELETE FROM item_author WHERE item=?";
+  $deleteAuthorLinksStmt = mysqli_prepare($connection, $query);
+  mysqli_stmt_bind_param($deleteAuthorLinksStmt, 'i', $itemId);      
+  mysqli_stmt_execute($deleteAuthorLinksStmt);
+  mysqli_stmt_close($deleteAuthorLinksStmt);
 
   foreach ($authors as $author) {
     $firstName = $author['firstName'];
     $lastName = $author['lastName'];
 
-    if (isset($author['id']) && $author['id'] !== 0) {
+    if (isset($author['id']) && $author['id'] != 0) {
       $authorId = $author['id'];
-      $query = "UPDATE author SET first_name='$firstName', last_name='$lastName' WHERE id=$authorId;
-                INSERT INTO item_author(item, author) VALUES($itemId, $authorId);";
-      
-      if (!mysqli_multi_query($connection, $query)) {
-        http_response_code(500);
-        mysqli_close($connection);
-        return; 
-      }
+
+      $query = "UPDATE author SET first_name=?, last_name=? WHERE id=?;";
+      $updateAuthorStmt = mysqli_prepare($connection, $query);
+      mysqli_stmt_bind_param($updateAuthorStmt, 'ssi', $firstName, $lastName, $authorId);      
+      mysqli_stmt_execute($updateAuthorStmt);
+      mysqli_stmt_close($updateAuthorStmt);      
     } else {
-      $query = "INSERT INTO author(first_name, last_name) VALUES('$firstName', '$lastName')";
-      if (!mysqli_query($connection, $query)) {
-        http_response_code(500);
-        mysqli_close($connection);
-        return;
-      }
-      
-      $authorId = mysqli_insert_id($connection);
-      $query = "INSERT INTO item_author(item, author) VALUES($itemId, $authorId);";
-      
-      if (!mysqli_query($connection, $query)) {
-        http_response_code(500);
-        mysqli_close($connection);
-        return;
-      }
-      
-      array_push($authorList, [
-        'id' => $authorId,
-        'firstName' => $firstName,
-        'lastName' => $lastName
-      ]);
+      $query = "INSERT INTO author(first_name, last_name) VALUES(?,?)";
+      $insertAuthorStmt = mysqli_prepare($connection, $query);
+      mysqli_stmt_bind_param($insertAuthorStmt, 'ss', $firstName, $lastName);      
+      mysqli_stmt_execute($insertAuthorStmt);
+      $authorId = mysqli_stmt_insert_id($insertAuthorStmt);
+      mysqli_stmt_close($insertAuthorStmt);
     }
+
+    $query = "INSERT INTO item_author(item, author) VALUES(?,?);";
+    $insertAuthorLinkStmt = mysqli_prepare($connection, $query);
+    mysqli_stmt_bind_param($insertAuthorLinkStmt, 'ii', $itemId, $authorId);      
+    mysqli_stmt_execute($insertAuthorLinkStmt);
+    mysqli_stmt_close($insertAuthorLinkStmt);
+
+    array_push($authorList, [
+      'id' => $authorId,
+      'firstName' => $firstName,
+      'lastName' => $lastName
+    ]);
   }
 
   mysqli_close($connection);  
@@ -324,7 +309,7 @@ function selectAuthor($itemId) {
               ON author.id = item_author.author
             WHERE item_author.item = ?";
 
-  include "#/connection.php";
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'i', $itemId);
 
@@ -346,7 +331,7 @@ function selectAuthor($itemId) {
 
 function searchItems($data) {
   $search = '%' . str_replace(' ', '%', $data['search']) . '%';
-  $outdated = isset($data['outdated']) && $data['outdated'];
+  $outdated = isset($data['outdated']) && $data['outdated'] == 'true';
 
   $items = [];
   $query = "SELECT item.id, name, edition, publication, editor, is_book
@@ -355,10 +340,12 @@ function searchItems($data) {
               ON item.id = item_author.item
             LEFT JOIN author
               ON item_author.author = author.id
-            WHERE (name LIKE ?
-            OR editor LIKE ?
-            OR CONCAT(first_name, ' ', last_name) LIKE ?
-            OR CONCAT(last_name, ' ', first_name) LIKE ?)";
+            WHERE (
+              name LIKE ?
+              OR editor LIKE ?
+              OR CONCAT(first_name, ' ', last_name) LIKE ?
+              OR CONCAT(last_name, ' ', first_name) LIKE ?
+            )";
 
   if (!$outdated) {
     $query .= " AND status = 1";
@@ -366,7 +353,7 @@ function searchItems($data) {
 
   $query .= " GROUP BY item.id;";
 
-  include "#/connection.php";
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'ssss', $search, $search, $search, $search);
 
@@ -415,7 +402,7 @@ function listItems() {
               ON item.subject = subject.id
             ORDER BY item.name";
 
-  include "#/connection.php";
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
 
   mysqli_stmt_execute($statement);
@@ -453,7 +440,7 @@ function selectStorage($id) {
   $storage = [];
   $query = "SELECT no FROM storage WHERE item=?;";
 
-  include "#/connection.php";
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'i', $id);
 
@@ -477,7 +464,7 @@ function selectStatus($id) {
               ON status_history.status=status.id
             WHERE status_history.item=?;";
 
-  include "#/connection.php";
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'i', $id);
 
@@ -508,7 +495,7 @@ function updateItemStatus($id, $status) {
       AND status=(SELECT id FROM status WHERE code='REMOVED');";
   }
 
-  include '#/connection.php';
+  $connection = getConnection();
   if (!mysqli_multi_query($connection, $query)) {
     http_response_code(500);
   }
@@ -534,7 +521,7 @@ function getQuantityInStock($id) {
                                     IN ('SELL', 'SELL_PARENT', 'AJUST_INVENTORY')))
           AS inStock;";
 
-  include "#/connection.php";
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'ii', $id, $id);
 
@@ -565,7 +552,7 @@ function selectCopiesForItem($itemId) {
                                     FROM transaction_type
                                     WHERE code = 'ADD');";
 
-  include '#/connection.php';
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'i', $itemId);
 
