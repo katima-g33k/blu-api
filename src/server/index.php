@@ -1,4 +1,5 @@
 <?php
+session_start();
 require_once '#/const.php';
 require_once '#/connection.php';
 
@@ -17,13 +18,6 @@ $apiKey = isset(getallheaders()['X-Authorization']) ? getallheaders()['X-Authori
 $username = isset($_SERVER['PHP_AUTH_USER']) ? $_SERVER['PHP_AUTH_USER'] : '';
 $password = isset($_SERVER['PHP_AUTH_PW']) ? $_SERVER['PHP_AUTH_PW'] : '';
 
-// Check API key
-if (API_KEY != $apiKey) {
-  http_response_code(401);
-  echo json_encode([ 'message' => 'Invalid API key' ]);
-  return;
-}
-
 require_once '#/routes.php';
 foreach ($routes[$_SERVER['REQUEST_METHOD']] as $route) {
   $regex = '/^' . preg_replace('/\d+/', ':(\w+)', str_replace('/', '\/', $_SERVER['PATH_INFO'])) . '$/';
@@ -33,10 +27,30 @@ foreach ($routes[$_SERVER['REQUEST_METHOD']] as $route) {
   }
 }
 
+$accessLevel = 'unauthorized';
+
+if (isset(getallheaders()['X-Authorization'])) {
+  if (isAdmin($username, $password)) {
+    $accessLevel = 'admin';
+  } else if (isEmployee($username, $password)) {
+    $accessLevel = 'employee';
+  }
+} else if (isset($_SESSION['memberNo'])) {
+  $accessLevel = 'member';
+} else {
+  $accessLevel = 'public';
+}
+
 if (!isset($apiCall)) {
   http_response_code(404);
   echo json_encode([ 'message' => 'Invalid API URL' ]);
   return;  
+}
+
+if ($apiCall['type'] != 'member' && $apiCall['type'] != 'public' && API_KEY != $apiKey) {
+  http_response_code(401);
+  echo json_encode([ 'message' => 'Invalid API key' ]);
+  return;
 }
 
 if ($apiCall['type'] == 'admin' && !isAdmin($username, $password)) {
@@ -46,6 +60,12 @@ if ($apiCall['type'] == 'admin' && !isAdmin($username, $password)) {
 }
 
 if ($apiCall['type'] == 'employee' && !isEmployee($username, $password)) {
+  http_response_code(401);
+  echo json_encode([ 'message' => 'Unauthaurized user' ]);
+  return;
+}
+
+if ($apiCall['type'] == 'member' && !isset($_SESSION['memberNo']) && !isEmployee($username, $password)) {
   http_response_code(401);
   echo json_encode([ 'message' => 'Unauthaurized user' ]);
   return;
@@ -71,6 +91,18 @@ switch ($_SERVER['REQUEST_METHOD']) {
     break;
   default:
     $data = [];
+}
+
+foreach ($data as $key => $value) {
+  $data[$key] = strip_tags($value);
+}
+
+if ($apiCall['type'] == 'member' && isset($_SESSION['memberNo']) && isset($apiCall['validationFn'])) {
+  if (!$apiCall['validationFn']()) {
+    http_response_code(401);
+    echo json_encode([ 'message' => 'Unauthaurized user' ]);
+    return;
+  }
 }
 
 try {

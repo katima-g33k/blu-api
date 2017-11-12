@@ -30,6 +30,7 @@ $getMember = function($params) {
   } else {
     $member['account']['copies'] = selectCopiesForMember($no);
     $member['account']['transfers'] = getTranferDates($no);
+    $member['account']['itemFeed'] = getItemFeed($no);
   }
 
   if ($member['isParent']) {
@@ -40,7 +41,7 @@ $getMember = function($params) {
 };
 
 $memberRenew = function($params) {
-  remewMember($params['no']);
+  return renewMember($params['no']);
 };
 
 $memberSearch = function($data = []) {
@@ -401,6 +402,53 @@ $memberDeleteCopy = function ($params) {
   }
 };
 
+$isSubscribed = function ($params) {
+  $no = $params['no'];
+  $id = $params['id'];
+
+  $query = "SELECT COUNT(*) FROM item_feed WHERE member=? AND item=?;";
+  $connection = getConnection();
+  $statement = mysqli_prepare($connection, $query);
+  mysqli_stmt_bind_param($statement, 'ii', $no, $id);
+
+  mysqli_stmt_bind_result($statement, $count);
+  mysqli_stmt_execute($statement);
+  mysqli_stmt_fetch($statement);
+  
+  mysqli_stmt_close($statement);
+  mysqli_close($connection);
+  return [ 'isSubscribed' => $count == 1 ];
+};
+
+$subscribe = function ($params) {
+  $no = $params['no'];
+  $id = $params['id'];
+
+  $query = "INSERT INTO item_feed(member, item) VALUES (?,?);";
+  $connection = getConnection();
+  $statement = mysqli_prepare($connection, $query);
+  mysqli_stmt_bind_param($statement, 'ii', $no, $id);
+
+  mysqli_stmt_execute($statement);
+  
+  mysqli_stmt_close($statement);
+  mysqli_close($connection);
+};
+
+$unsubscribe = function ($params) {
+  $no = $params['no'];
+  $id = $params['id'];
+
+  $query = "DELETE FROM item_feed WHERE member=? AND item=?;";
+  $connection = getConnection();
+  $statement = mysqli_prepare($connection, $query);
+  mysqli_stmt_bind_param($statement, 'ii', $no, $id);
+
+  mysqli_stmt_execute($statement);
+  
+  mysqli_stmt_close($statement);
+  mysqli_close($connection);
+};
 
 // Private ressource functions
 function getMemberComment($no) {
@@ -698,8 +746,6 @@ function insertCopy($itemId, $price) {
 
 function handleReservation($copy, $item) {
   $data = null;
-  $connection = getConnection();
-
   $query = "SELECT r.id,
                    r.member,
                    m.first_name,
@@ -745,15 +791,38 @@ function handleReservation($copy, $item) {
 }
 
 function renewMember($no) {
-  $query = "UPDATE member SET last_activity=CURRENT_TIMESTAMP WHERE no=?;";
+  global $accessLevel;
+
+  if ($accessLevel != 'member' || isActive($no)) {
+    $query = "UPDATE member SET last_activity=CURRENT_TIMESTAMP WHERE no=?;";
+
+    $connection = getConnection();
+    $statement = mysqli_prepare($connection, $query);
+    mysqli_stmt_bind_param($statement, 'i', $no);
+    mysqli_stmt_execute($statement);
+
+    mysqli_stmt_close($statement);
+    mysqli_close($connection);
+  } else {
+    http_response_code(401);
+    return [ 'message' => 'Unable to renew deactivated account' ];
+  }
+}
+
+function isActive($no) {
+  $query = "SELECT COUNT(no) FROM member WHERE no=? AND last_activity > SUBDATE(CURRENT_TIMESTAMP, INTERVAL 1 YEAR)";
 
   $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
-  mysqli_stmt_bind_param($statement, 'i', $no);  
+  mysqli_stmt_bind_param($statement, 'i', $no);
+
   mysqli_stmt_execute($statement);
+  mysqli_stmt_bind_result($statement, $count);
+  mysqli_stmt_fetch($statement);
 
   mysqli_stmt_close($statement);
   mysqli_close($connection);
+  return $count > 0;
 }
 
 function selectDonations() {
@@ -870,5 +939,59 @@ function selectCopiesForMember($no) {
   mysqli_stmt_close($statement);
   mysqli_close($connection);
   return $copies;
+}
+
+function getAmountInStock($id) {
+  $query = "SELECT
+              (SELECT COUNT(DISTINCT(copy.id))
+              FROM copy
+              INNER JOIN transaction
+                ON copy.id = transaction.copy
+              WHERE item = $id) - 
+              (SELECT COUNT(DISTINCT(copy.id))
+              FROM copy
+              INNER JOIN transaction
+                ON copy.id = transaction.copy
+              WHERE item = $id
+              AND transaction.type IN (SELECT transaction_type.id
+                                      FROM transaction_type
+                                      WHERE transaction_type.code
+                                      IN ('SELL', 'SELL_PARENT', 'AJUST_INVENTORY')))
+            AS quantity;";
+
+  $connection = getConnection();
+  $result = mysqli_query($connection, $query) or die("Query failed: '$query'");
+  $row = mysqli_fetch_assoc($result);
+
+  mysqli_close($connection);
+  return (int)$row['quantity'];
+}
+
+function getItemFeed($no) {
+  $items = [];
+  $query = "SELECT item.id, item.name
+            FROM item_feed
+            INNER JOIN item
+              ON item_feed.item=item.id
+            WHERE member=?;";
+
+  $connection = getConnection();
+  $statement = mysqli_prepare($connection, $query);
+  mysqli_stmt_bind_param($statement, 'i', $no);
+
+  mysqli_stmt_execute($statement);
+  mysqli_stmt_bind_result($statement, $id, $name);
+
+  while (mysqli_stmt_fetch($statement)) {
+    array_push($items, [
+      'id' => $id,
+      'title' => $name,
+      'inStock' => getAmountInStock($id)
+    ]);
+  }
+
+  mysqli_stmt_close($statement);
+  mysqli_close($connection);
+  return $items;
 }
 ?>

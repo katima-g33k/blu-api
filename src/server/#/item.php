@@ -22,6 +22,9 @@ $itemList = function($data = []) {
 };
 
 $getItem = function($params) {
+  global $accessLevel;
+  $isPublic = $accessLevel == 'public' || $accessLevel == 'member';
+
   $id = $params['id'];
   $query = "SELECT item.name,
                    item.publication,
@@ -51,6 +54,35 @@ $getItem = function($params) {
 
   mysqli_stmt_close($statement);
   mysqli_close($connection);
+
+  $copies = selectCopiesForItem($id);
+
+  if ($isPublic) {
+    $quantity = 0;
+    $avgPrice = 0;
+
+    foreach($copies as $copy) {
+      if (count($copy['transaction']) == 1) {
+        $avgPrice += $copy['price'];
+        $quantity++;
+      }
+    }
+
+    if ($quantity != 0) {
+      $avgPrice /= $quantity;
+    }
+
+    $copies = [
+      'quanity' => $quantity,
+      'averagePrice' => $avgPrice,
+    ];
+    $reservations = null;
+    $storage = null;
+  } else {
+    $storage = selectStorage($id);
+    $reservations = selectReservationsForItem($id);
+  }
+
   return [
     'id' => $id,
     'name' => $name,
@@ -69,10 +101,10 @@ $getItem = function($params) {
     'ean13' => $ean13,
     'comment' => $comment,
     'author' => $isBook == 1 ? selectAuthor($id) : [],
-    'copies' => selectCopiesForItem($id),
+    'copies' => $copies,
     'status' => selectStatus($id),
-    'storage' => selectStorage($id),
-    'reservation' => selectReservationsForItem($id)
+    'storage' => $storage,
+    'reservation' => $reservations
   ];
 };
 
