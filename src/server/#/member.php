@@ -1,5 +1,31 @@
 <?php
 // Public API functions
+$memberLogin = function($data) {
+  if (!isset($data['email']) || !isset($data['password'])) {
+     http_response_code(400);
+     return [ 'message' => 'Missing parameter' ];
+  }
+
+  $email = $data['email'];
+  $password = $data['password'];
+
+  $query = "SELECT no FROM member WHERE email=? AND no=?";
+  $connection = getConnection();
+  $statement = mysqli_prepare($connection, $query);
+  mysqli_stmt_bind_param($statement, 'si', $email, $password);
+
+  mysqli_stmt_execute($statement);
+  mysqli_stmt_bind_result($statement, $no);
+
+  mysqli_stmt_fetch($statement);
+  mysqli_stmt_close($statement);
+  mysqli_close($connection);
+
+  if (!$no) {
+    http_response_code(401);
+  }
+};
+
 $deleteMember = function($params) {
   $no = $params['no'];
   $query = "DELETE FROM error WHERE member=$no;

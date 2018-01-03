@@ -4,7 +4,7 @@
   "description": "An API for the BLU apps.",
   "main": "./dist/index.js",
   "scripts": {
-    "build": "babel ./src/client --out-dir dist --ignore 'test.js'",    
+    "build": "babel ./src/client --out-dir dist --ignore 'test.js'",
     "lint": "eslint ./src/client",
     "start": "babel-node ./src/client/test.js"
   },

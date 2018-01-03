@@ -66,6 +66,7 @@ $routes = [
     [ 'url' => '/member/:memberNo/copy/:copyId/transaction', 'fn' => $transactionInsert, 'type' => 'employee' ],
     [ 'url' => '/member/comment/:id', 'fn' => $memberCommentUpdate, 'type' => 'employee' ],
     [ 'url' => '/member/copy/:id', 'fn' => $memberUpdateCopy, 'type' => 'employee' ],
+    [ 'url' => '/member/login', 'fn' => $memberLogin, 'type' => 'public' ],
     [ 'url' => '/reservation', 'fn' => $reservationInsert, 'type' => 'employee' ],
   ],
 ];
