@@ -93,10 +93,6 @@ switch ($_SERVER['REQUEST_METHOD']) {
     $data = [];
 }
 
-foreach ($data as $key => $value) {
-  $data[$key] = strip_tags($value);
-}
-
 if ($apiCall['type'] == 'member' && isset($_SESSION['memberNo']) && isset($apiCall['validationFn'])) {
   if (!$apiCall['validationFn']()) {
     http_response_code(401);
