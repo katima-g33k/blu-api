@@ -756,13 +756,14 @@ function handleReservation($copy, $item) {
             ORDER BY date ASC
             LIMIT 1;";
 
-  $connection = getConnection();  
+  $connection = getConnection();
   $statement = mysqli_prepare($connection, $query);
   mysqli_stmt_bind_param($statement, 'i', $item);
 
   mysqli_stmt_execute($statement);
   mysqli_stmt_bind_result($statement, $id, $memberNo, $memberFirstName, $memberLastName);
-  mysqli_stmt_close($statement);  
+  mysqli_stmt_fetch($statement);
+  mysqli_stmt_close($statement);
 
   if ($id) {
     $query = "DELETE FROM reservation WHERE id=$id;
@@ -774,7 +775,7 @@ function handleReservation($copy, $item) {
               );";
 
     if (!mysqli_multi_query($connection, $query)) {
-      mysqli_close($connection);      
+      mysqli_close($connection);
       http_response_code(500);
       return;
     }
